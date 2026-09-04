@@ -41,6 +41,18 @@ commands:
       - go test -race ./...
     output: As `test`, plus a report for any data race detected.
 
+  check:
+    description: |
+      Runs vet and the tests at the same time.
+
+      Both are read-only and independent, so there is no reason to wait for one
+      before starting the other. Output is labelled with which one produced it.
+    steps:
+      - parallel:
+          vet: go vet ./...
+          test: go test ./...
+    output: Interleaved output from both, each line labelled. Fails if either does.
+
   lint:
     description: |
       Runs the same checks CI runs: vet, formatting, and schema drift.

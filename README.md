@@ -150,6 +150,58 @@ Each step is its own process, so "stop at the first failure" is real rather
 than inherited from shell semantics — which matters on Windows, where
 PowerShell 5.1 has no `&&` at all.
 
+### Running things at the same time
+
+Steps are sequential, so a **parallel group** is how you start a set of
+services together. Entries are named, and the name labels their output:
+
+```yaml
+dev:
+  description: Runs the whole stack locally.
+  steps:
+    - npm install          # sequential, as usual
+    - parallel:
+        api: noodge api
+        worker: noodge worker
+        web: npm run dev
+```
+
+```
+api    | listening on :3000
+worker | polling for jobs
+web    | vite ready in 412 ms
+```
+
+Entries are ordinary steps, so `noodge api` works and each service keeps its
+own documentation and parameters.
+
+**When one exits.** A non-zero exit stops the whole group and noodge reports
+that exit code — a crashed API with two healthy logs still scrolling is not a
+useful state. A clean exit is left alone, so a watcher or a one-shot task that
+finishes does not tear down the servers beside it.
+
+**Nothing is left behind.** Everything a group starts goes into one process
+tree, so stopping it also stops what those processes started. This is the part
+that is easy to get wrong on Windows, which has no process groups: killing
+`npm` there leaves `node` holding the port, invisible to whoever is wondering
+why the next run cannot bind. noodge uses a Job Object with kill-on-close, so
+the whole tree goes.
+
+**Prefixes cost colour.** Labelling output means capturing it through a pipe,
+and a program handed a pipe concludes it is not talking to a terminal and turns
+its colours off. noodge sets `FORCE_COLOR` and `CLICOLOR_FORCE`, which many
+tools honour, but anything that only checks for a terminal will go monochrome.
+When you would rather have the colours than the labels:
+
+```yaml
+    - parallel:
+        web: npm run dev
+      prefix: false
+```
+
+Entries get no stdin: several processes reading one terminal is a race with no
+useful outcome.
+
 ## Commands
 
 | | |

@@ -60,6 +60,7 @@ func buildCommand(env *Env, opts *options, file *config.File, nc *config.NamedCo
 			Stdout:  env.Stdout,
 			Stderr:  env.Stderr,
 			Stdin:   env.Stdin,
+			Color:   env.TTY,
 		}
 
 		plan, err := runner.PlanCommand(req)
@@ -145,7 +146,17 @@ func printPlan(env *Env, nc *config.NamedCommand, plan *runner.Plan) {
 	fmt.Fprintf(env.Stdout, "%s would run in %s:\n", nc.Name, plan.Dir)
 
 	for i, s := range plan.Steps {
-		fmt.Fprintf(env.Stdout, "  %d. %s\n", i+1, s.Display)
+		if !s.IsGroup() {
+			fmt.Fprintf(env.Stdout, "  %d. %s\n", i+1, s.Display)
+			continue
+		}
+
+		// A group starts one process per entry, so list them rather than
+		// collapsing the whole group into a single opaque line.
+		fmt.Fprintf(env.Stdout, "  %d. parallel (prefix: %t)\n", i+1, s.Prefix)
+		for _, e := range s.Parallel {
+			fmt.Fprintf(env.Stdout, "       %s: %s\n", e.Label, e.Display)
+		}
 	}
 
 	if len(plan.Env) > 0 {
