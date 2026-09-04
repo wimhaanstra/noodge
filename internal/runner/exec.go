@@ -31,6 +31,11 @@ type Request struct {
 	Stdout io.Writer
 	Stderr io.Writer
 	Stdin  io.Reader
+
+	// Color reports whether the terminal can show colour, which decides
+	// whether a parallel group's labels are coloured and whether its entries
+	// are told to keep their own colour.
+	Color bool
 }
 
 // Plan is a command resolved down to the exact processes it will start.
@@ -56,7 +61,18 @@ type PlannedStep struct {
 	Line string
 	// Display is the step as it should be shown to a human.
 	Display string
+
+	// Parallel holds the entries of a group, which run at once. When it is
+	// set, Argv is empty: the step itself starts nothing.
+	Parallel []PlannedStep
+	// Prefix labels each output line of a group with the entry it came from.
+	Prefix bool
+	// Label names an entry within a group, for those prefixes.
+	Label string
 }
+
+// IsGroup reports whether the step runs several things at once.
+func (s PlannedStep) IsGroup() bool { return len(s.Parallel) > 0 }
 
 // ExitError reports that a step exited non-zero. The code is the child's own,
 // passed through unchanged.
@@ -124,6 +140,10 @@ func planStep(s config.Step, req *Request, shell Shell, appended []string, expli
 		args = nil
 	}
 
+	if s.IsParallel() {
+		return planGroup(s, req, shell, appended, explicitArgs)
+	}
+
 	if s.IsArgv() {
 		argv, err := ExpandArgv(s.Argv, req.Values, args)
 		if err != nil {
@@ -152,6 +172,43 @@ func planStep(s config.Step, req *Request, shell Shell, appended []string, expli
 	return PlannedStep{Argv: argv, Shell: true, Line: line, Display: line}, nil
 }
 
+// planGroup resolves the entries of a parallel group.
+func planGroup(s config.Step, req *Request, shell Shell, appended []string, explicitArgs bool) (PlannedStep, error) {
+	out := PlannedStep{
+		Prefix:  s.Prefixed(),
+		Display: s.String(),
+	}
+
+	for _, entry := range s.Parallel {
+		// Pass-through arguments are appended to the last step of a command,
+		// and a group is one step: they would have to go to every entry or to
+		// an arbitrary one, and neither is a defensible guess.
+		planned, err := planStep(entry.Step, req, shell, nil, explicitArgs)
+		if err != nil {
+			return PlannedStep{}, fmt.Errorf("parallel entry %q: %w", entry.Name, err)
+		}
+
+		// The label is the name the author gave it, so every prefix is
+		// meaningful by construction rather than derived from a command line.
+		planned.Label = entry.Name
+		out.Parallel = append(out.Parallel, planned)
+	}
+
+	return out, nil
+}
+
+// newProcess builds the command for one step, shared by sequential steps and
+// by the entries of a parallel group so they cannot drift apart.
+func newProcess(plan *Plan, step PlannedStep) *exec.Cmd {
+	cmd := exec.Command(step.Argv[0], step.Argv[1:]...)
+	if step.Shell {
+		applyShellQuirks(cmd, plan.Shell, step.Line)
+	}
+	cmd.Dir = plan.Dir
+	cmd.Env = environ(plan.Env)
+	return cmd
+}
+
 // Run executes a plan, stopping at the first step that fails.
 func Run(req *Request, plan *Plan) error {
 	// While a child is running, Ctrl+C belongs to it. On Windows the child is
@@ -162,12 +219,14 @@ func Run(req *Request, plan *Plan) error {
 	defer signal.Stop(interrupts)
 
 	for i, step := range plan.Steps {
-		cmd := exec.Command(step.Argv[0], step.Argv[1:]...)
-		if step.Shell {
-			applyShellQuirks(cmd, plan.Shell, step.Line)
+		if step.IsGroup() {
+			if err := runGroup(req, plan, step, i+1); err != nil {
+				return err
+			}
+			continue
 		}
-		cmd.Dir = plan.Dir
-		cmd.Env = environ(plan.Env)
+
+		cmd := newProcess(plan, step)
 		cmd.Stdin = req.Stdin
 		cmd.Stdout = req.Stdout
 		cmd.Stderr = req.Stderr

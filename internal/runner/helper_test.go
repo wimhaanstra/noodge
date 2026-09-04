@@ -5,6 +5,7 @@ import (
 	"os"
 	"strconv"
 	"testing"
+	"time"
 )
 
 // The tests in this package need a program that reports exactly what it
@@ -50,6 +51,20 @@ func helper(mode string, args []string) int {
 	case "env":
 		for _, a := range args {
 			fmt.Printf("%s=%s\n", a, os.Getenv(a))
+		}
+
+	case "sleep":
+		// Used to show that a group's entries really do overlap in time.
+		if len(args) < 1 {
+			return 1
+		}
+		ms, err := strconv.Atoi(args[0])
+		if err != nil {
+			return 1
+		}
+		time.Sleep(time.Duration(ms) * time.Millisecond)
+		if len(args) > 1 {
+			fmt.Println(args[1])
 		}
 
 	case "cwd":
