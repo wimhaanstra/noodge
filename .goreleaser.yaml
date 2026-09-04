@@ -100,9 +100,16 @@ scoops:
       branch: main
       # A different repository than the one being released, so the workflow's
       # built-in GITHUB_TOKEN cannot write to it and a personal access token
-      # is required. `index .Env` rather than `.Env.X` so that a missing
-      # secret yields an empty string instead of failing the whole release.
-      token: '{{ index .Env "SCOOP_BUCKET_TOKEN" }}'
+      # is required.
+      #
+      # This must be exactly {{ .Env.NAME }}. GoReleaser validates token
+      # fields with a rule of their own and rejects anything else with
+      # "expected {{ .Env.VAR_NAME }} only (no plain-text or other
+      # interpolation)" — including the `index .Env` form used elsewhere in
+      # this file. `goreleaser check` does not catch it, because it never
+      # evaluates templates; it fails at publish time, after the release has
+      # already gone out.
+      token: "{{ .Env.SCOOP_BUCKET_TOKEN }}"
 
     # Manifests go at the repository root. Scoop will read them from a bucket/
     # subdirectory too, but `scoop bucket list` then reports the bucket as
