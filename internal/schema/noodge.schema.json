@@ -1,0 +1,169 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wimhaanstra.github.io/noodge/schema/v1/noodge.schema.json",
+  "$defs": {
+    "Command": {
+      "properties": {
+        "description": {
+          "type": "string",
+          "description": "Description explains what the command does. This is the long-form text\nshown in the TUI's right-hand pane, so it can run to several paragraphs."
+        },
+        "params": {
+          "items": {
+            "$ref": "#/$defs/Param"
+          },
+          "type": "array",
+          "description": "Params are the parameters this command accepts. They are validated and\ntype-coerced before any step runs, then substituted into the steps."
+        },
+        "steps": {
+          "items": {
+            "$ref": "#/$defs/Step"
+          },
+          "type": "array",
+          "description": "Steps are run in order, each as its own process. The command stops at\nthe first step that exits non-zero and reports that exit code."
+        },
+        "output": {
+          "type": "string",
+          "description": "Output describes what the command produces: what it writes to stdout,\nwhat files it leaves behind, what a reader should expect to see. It is\ndocumentation only and noodge never verifies it."
+        },
+        "env": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object",
+          "description": "Env is set for this command's steps, merged over the file-level env."
+        },
+        "cwd": {
+          "type": "string",
+          "description": "Cwd is the working directory for this command's steps, relative to the\ndirectory holding the noodge.yaml. Defaults to that directory."
+        },
+        "aliases": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array",
+          "description": "Aliases are alternative names this command can be invoked by."
+        },
+        "hidden": {
+          "type": "boolean",
+          "description": "Hidden keeps the command out of the TUI list and out of tab completion.\nIt remains runnable by name. Use it for internal or CI-only commands."
+        },
+        "shell": {
+          "type": "string",
+          "description": "Shell overrides the interpreter for this command's string steps."
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "steps"
+      ],
+      "description": "Command is one runnable, documented entry in a noodge.yaml."
+    },
+    "Commands": {
+      "additionalProperties": {
+        "$ref": "#/$defs/Command"
+      },
+      "type": "object",
+      "description": "The runnable commands, keyed by the name you type after `noodge`."
+    },
+    "Param": {
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Name is the template variable this parameter fills. A step referring to\n{{host}} or {{flag host}} is referring to the parameter named \"host\"."
+        },
+        "flag": {
+          "type": "string",
+          "description": "Flag is how the parameter is typed on the noodge command line, written\nin full including the leading dashes, for example \"--host\". It must use\ntwo dashes; single-dash long flags cannot be expressed.\n\nThis is independent of how the flag reaches the wrapped tool. A step is\nfree to write \"-host {{host}}\" or \"/p:Host={{host}}\" instead."
+        },
+        "short": {
+          "type": "string",
+          "description": "Short is an optional single-character shorthand, written with one dash,\nfor example \"-c\"."
+        },
+        "type": {
+          "type": "string",
+          "description": "Type is the value's type. Defaults to string."
+        },
+        "description": {
+          "type": "string",
+          "description": "Description explains what the parameter controls. Shown beside the\nfield in the TUI and in the command's help text."
+        },
+        "required": {
+          "type": "boolean",
+          "description": "Required refuses to run the command unless the parameter is given."
+        },
+        "default": {
+          "description": "Default is used when the parameter is not supplied. A parameter with a\ndefault is never unset, so {{flag x}} always expands for it."
+        },
+        "values": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array",
+          "description": "Values is the list of allowed values for an enum parameter. It also\nsupplies the candidates for tab completion."
+        },
+        "pattern": {
+          "type": "string",
+          "description": "Pattern is an optional regular expression the value must match. It is\nchecked before the value is substituted into any step."
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "name",
+        "flag"
+      ],
+      "description": "Param is one parameter a command accepts."
+    },
+    "Step": {
+      "oneOf": [
+        {
+          "type": "string"
+        },
+        {
+          "items": {
+            "type": "string"
+          },
+          "type": "array",
+          "minItems": 1
+        }
+      ],
+      "title": "Step",
+      "description": "One command in the sequence. A string is run through a shell; a list of arguments is executed directly with no shell."
+    }
+  },
+  "properties": {
+    "version": {
+      "type": "integer",
+      "description": "Version is the config format version. Currently always 1."
+    },
+    "name": {
+      "type": "string",
+      "description": "Name is a human-readable name for the project, shown in the TUI header."
+    },
+    "shell": {
+      "type": "string",
+      "description": "Shell overrides the interpreter used to run string steps. Defaults to\n\"cmd /c\" on Windows and \"sh -c\" everywhere else. A per-command shell\ntakes precedence over this."
+    },
+    "env": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "type": "object",
+      "description": "Env is applied to every command in this file. A command's own env is\nmerged over the top, so a command can override a single variable\nwithout restating the rest."
+    },
+    "commands": {
+      "$ref": "#/$defs/Commands",
+      "description": "Commands are the runnable commands, kept in the order they appear in\nthe file so the TUI can list them the way they were written."
+    }
+  },
+  "additionalProperties": false,
+  "type": "object",
+  "required": [
+    "version",
+    "commands"
+  ],
+  "title": "noodge.yaml",
+  "description": "Configuration for noodge, a documented, discoverable task runner."
+}
