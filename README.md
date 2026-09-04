@@ -15,8 +15,8 @@ noodge                             # browse the commands, with their docs
 noodge start:local --host foo      # run one, with its parameters validated
 ```
 
-> **Status: early.** The config format, validation and the JSON Schema are
-> working. Running commands, the full-screen browser, shell completion and
+> **Status: early.** The config format, validation, the JSON Schema and
+> running commands all work. The full-screen browser, shell completion and
 > installers are still being built.
 
 ## What a noodge.yaml looks like
@@ -109,13 +109,41 @@ PowerShell 5.1 has no `&&` at all.
 | | |
 |---|---|
 | `noodge` | List this project's commands (the browser lands in a later release) |
-| `noodge list [--json]` | The same, optionally machine-readable |
+| `noodge <command>` | Run a command from `noodge.yaml` |
+| `noodge run <command>` | The same, for when the name collides with one below |
+| `noodge list [--json]` | List commands, optionally machine-readable |
 | `noodge validate` | Check `noodge.yaml` and report problems with line numbers |
+| `noodge init` | Write a starter `noodge.yaml` |
 | `noodge schema` | Print the JSON Schema |
 | `noodge version` | Print the version |
 
-`-C <dir>` runs against a project elsewhere. `NOODGE_CONFIG` points at a
-specific file.
+`-C <dir>` runs against a project elsewhere, `NOODGE_CONFIG` points at a
+specific file, and `--dry-run` prints the exact command lines without running
+anything.
+
+Built-in names win, so a command you call `list` is reached with
+`noodge run list`. `noodge validate` warns when that happens rather than
+leaving you to find out later.
+
+### Passing extra arguments
+
+Anything after a bare `--` goes to the wrapped tool:
+
+```bash
+noodge test -- -run TestDiscover -v
+```
+
+It is substituted where `{{args}}` appears, or appended to the last step when
+no step mentions it. `noodge <command> --help` says which, for that command,
+and `--dry-run` shows exactly where it landed.
+
+### Exit codes
+
+A step's exit code passes through untouched, so `noodge build` is a drop-in
+replacement for the command it wraps in a script or a CI job. A command stops
+at the first step that fails. noodge's own refusals — a bad config, an unknown
+command, a missing required parameter — exit **2**, and every one of them
+happens before any process starts.
 
 ## Editor support
 
@@ -148,6 +176,32 @@ noodge.yaml:8:15: error: flag "-host" must start with two dashes
 
 Missing descriptions are warnings, never errors. A half-written config is
 exactly when you least want an argument with your tooling.
+
+## Parameter values are always quoted
+
+Values arrive from terminals and from CI, and a string step goes through a
+shell, so every value is quoted as it is substituted. There is no per-parameter
+opt-out:
+
+```bash
+noodge deploy --host 'a && shutdown /s'
+```
+
+reaches the wrapped tool as one literal argument. It is data, and it stays
+data. `{{args}}` is the single deliberate exception, because those are words
+the user typed at their own prompt for that one invocation.
+
+Getting this right on Windows takes two passes, because two parsers disagree
+about it: `cmd.exe` escapes an embedded quote as `""`, while the C runtime in
+the program being launched expects `\"`. Satisfying either alone breaks the
+other. noodge quotes for the C runtime, then caret-escapes every character
+`cmd` acts on — the quotes included — so `cmd` never enters its quoted state,
+and what survives its pass is exactly what the program expects.
+
+One gap is documented rather than fixed: `cmd` expands `%VAR%` before caret
+processing, and nothing on a command line prevents that. Expansion produces
+text rather than a command, so it cannot run anything, but it is a surprise.
+Use the list step form for values that may contain a percent sign.
 
 ## No telemetry
 
