@@ -47,7 +47,13 @@ func runGroup(req *Request, plan *Plan, group PlannedStep, stepNum int) error {
 	// the writes have to be serialised. Without this it is a data race, and on
 	// a real terminal it is two log lines spliced together.
 	var (
-		wg      sync.WaitGroup
+		wg sync.WaitGroup
+		// pumps tracks the goroutines reading each entry's output. They
+		// outlive the process they are reading: a program can write a last
+		// line and exit, and that line is still in the pipe. Returning without
+		// waiting for them loses it, and races with whoever reads the output
+		// next — which is exactly what the race detector caught in CI.
+		pumps   sync.WaitGroup
 		mu      sync.Mutex
 		results = make(chan entryResult, len(group.Parallel))
 	)
@@ -67,7 +73,7 @@ func runGroup(req *Request, plan *Plan, group PlannedStep, stepNum int) error {
 		var closers []io.Closer
 		if group.Prefix {
 			outPipe, errPipe, err := prefixedPipes(
-				stdout, stderr, req.Color,
+				&pumps, stdout, stderr, req.Color,
 				entry.Label, colorFor(entry.Label, group.Parallel), width, cmd)
 			if err != nil {
 				tree.terminate()
@@ -114,7 +120,14 @@ func runGroup(req *Request, plan *Plan, group PlannedStep, stepNum int) error {
 		close(results)
 	}()
 
-	return collect(stderr, results, tree, stepNum)
+	failure := collect(stderr, results, tree, stepNum)
+
+	// Every process has exited and our copies of the write ends are closed, so
+	// the readers will now see EOF. Waiting for them is what guarantees the
+	// output is complete before this returns.
+	pumps.Wait()
+
+	return failure
 }
 
 // collect waits for the group, tearing it down at the first failure.
@@ -162,7 +175,7 @@ func (l lockedWriter) Write(p []byte) (int, error) {
 }
 
 // prefixedPipes wires a process's output through a labeller.
-func prefixedPipes(stdout, stderr io.Writer, useColor bool, label string, color, width int, cmd *exec.Cmd) (io.Closer, io.Closer, error) {
+func prefixedPipes(pumps *sync.WaitGroup, stdout, stderr io.Writer, useColor bool, label string, color, width int, cmd *exec.Cmd) (io.Closer, io.Closer, error) {
 	outR, outW, err := os.Pipe()
 	if err != nil {
 		return nil, nil, err
@@ -178,8 +191,16 @@ func prefixedPipes(stdout, stderr io.Writer, useColor bool, label string, color,
 	cmd.Stderr = errW
 
 	prefix := renderPrefix(label, color, width, useColor)
-	go pump(outR, stdout, prefix)
-	go pump(errR, stderr, prefix)
+
+	pumps.Add(2)
+	go func() {
+		defer pumps.Done()
+		pump(outR, stdout, prefix)
+	}()
+	go func() {
+		defer pumps.Done()
+		pump(errR, stderr, prefix)
+	}()
 
 	// The write ends belong to the child once it has started; closing ours
 	// after Wait is what lets the readers see EOF.

@@ -53,6 +53,20 @@ func helper(mode string, args []string) int {
 			fmt.Printf("%s=%s\n", a, os.Getenv(a))
 		}
 
+	case "spam":
+		// Writes a lot and exits immediately, so the last lines are still in
+		// the pipe when the process itself is already gone.
+		if len(args) < 1 {
+			return 1
+		}
+		n, err := strconv.Atoi(args[0])
+		if err != nil {
+			return 1
+		}
+		for i := 1; i <= n; i++ {
+			fmt.Printf("line %d\n", i)
+		}
+
 	case "sleep":
 		// Used to show that a group's entries really do overlap in time.
 		if len(args) < 1 {

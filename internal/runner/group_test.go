@@ -1,7 +1,9 @@
 package runner
 
 import (
+	"io"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -201,4 +203,84 @@ commands:
 	if strings.Join(got, ",") != strings.Join(want, ",") {
 		t.Errorf("got %v, want %v", got, want)
 	}
+}
+
+// A program can write its last line and exit immediately, leaving that line in
+// the pipe after the process is already gone. Returning without waiting for
+// the readers loses it, and races with whoever reads the output next — which
+// is how CI's race detector found this.
+func TestGroupCapturesEveryLine(t *testing.T) {
+	exe := helperPath(t)
+
+	const lines = 400
+
+	file := project(t, `version: 1
+commands:
+  noisy:
+    description: Two chatty entries that exit at once.
+    steps:
+      - parallel:
+          one: [`+yaml(exe)+`, '-noodge-helper', 'spam', '400']
+          two: [`+yaml(exe)+`, '-noodge-helper', 'spam', '400']
+`)
+
+	nc, ok := file.Config.Commands.Get("noisy")
+	if !ok {
+		t.Fatal("noisy not found")
+	}
+
+	// A slow writer is what makes this deterministic rather than a race the
+	// test usually loses. The processes finish long before their output has
+	// been written out, so returning early is guaranteed to truncate.
+	out := &slowWriter{delay: 200 * time.Microsecond}
+
+	req := &Request{
+		File:    file,
+		Command: nc,
+		Values:  Values{},
+		Stdout:  out,
+		Stderr:  io.Discard,
+	}
+
+	plan, err := PlanCommand(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := Run(req, plan); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+
+	text := out.String()
+	for _, label := range []string{"one", "two"} {
+		count := 0
+		for _, l := range strings.Split(text, "\n") {
+			if strings.HasPrefix(l, label) && strings.Contains(l, "line ") {
+				count++
+			}
+		}
+		if count != lines {
+			t.Errorf("entry %q produced %d lines, want %d", label, count, lines)
+		}
+	}
+}
+
+// slowWriter takes a moment over every write, so output still in flight when a
+// process exits is unmistakably still in flight.
+type slowWriter struct {
+	delay time.Duration
+	mu    sync.Mutex
+	buf   strings.Builder
+}
+
+func (w *slowWriter) Write(p []byte) (int, error) {
+	time.Sleep(w.delay)
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.buf.Write(p)
+}
+
+func (w *slowWriter) String() string {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.buf.String()
 }
