@@ -202,3 +202,171 @@ commands:
 		t.Errorf("expected a default type error, got:\n%s", d.Error())
 	}
 }
+
+func TestParallelGroupParsesInDeclaredOrder(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "noodge.yaml")
+	writeFile(t, path, `version: 1
+commands:
+  dev:
+    description: Runs the stack.
+    steps:
+      - parallel:
+          zebra: node z.js
+          apple: node a.js
+          mango: ["node", "m.js"]
+`)
+
+	f, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d := Validate(f); d.HasErrors() {
+		t.Fatalf("unexpected errors:\n%s", d.Errors().Error())
+	}
+
+	nc, _ := f.Config.Commands.Get("dev")
+	step := nc.Steps[0]
+
+	if !step.IsParallel() {
+		t.Fatal("expected a parallel group")
+	}
+
+	var got []string
+	for _, e := range step.Parallel {
+		got = append(got, e.Name)
+	}
+	if strings.Join(got, ",") != "zebra,apple,mango" {
+		t.Errorf("order not preserved: got %v", got)
+	}
+
+	// The list form still works inside a group.
+	if !step.Parallel[2].Step.IsArgv() {
+		t.Error("the third entry should have decoded as an argv step")
+	}
+	if !step.Prefixed() {
+		t.Error("prefixing should default to on")
+	}
+}
+
+func TestParallelPrefixCanBeTurnedOff(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "noodge.yaml")
+	writeFile(t, path, `version: 1
+commands:
+  dev:
+    description: Raw output.
+    steps:
+      - parallel:
+          api: node a.js
+        prefix: false
+`)
+
+	f, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	nc, _ := f.Config.Commands.Get("dev")
+	if nc.Steps[0].Prefixed() {
+		t.Error("prefix: false should turn labelling off")
+	}
+}
+
+// A quoted value containing a colon must stay a string. An earlier
+// implementation re-serialised each entry in order to decode it, and this is
+// the case that broke: the re-rendered text parsed back as a mapping.
+//
+// An unquoted value containing ": " is invalid YAML in the first place, and
+// the parser rejects it with a position, which is the right answer.
+func TestParallelEntryKeepsAColonInItsValue(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "noodge.yaml")
+	writeFile(t, path, `version: 1
+commands:
+  dev:
+    description: Tricky value.
+    steps:
+      - parallel:
+          api: "sh -c 'echo port: 3000'"
+`)
+
+	f, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	nc, _ := f.Config.Commands.Get("dev")
+	entry := nc.Steps[0].Parallel[0]
+
+	if entry.Step.IsParallel() || entry.Step.Line == "" {
+		t.Fatalf("value was not kept as a string: %+v", entry.Step)
+	}
+	if !strings.Contains(entry.Step.Line, "port: 3000") {
+		t.Errorf("value altered: %q", entry.Step.Line)
+	}
+}
+
+func TestParallelGroupProblems(t *testing.T) {
+	tests := []struct {
+		name   string
+		doc    string
+		substr string
+	}{
+		{
+			name: "nested group",
+			doc: `      - parallel:
+          outer:
+            parallel:
+              inner: echo hi
+`,
+			substr: "nests another parallel group",
+		},
+		{
+			// The parser rejects this before validation sees it, with a
+			// message that names both lines. Kept as a test because the
+			// behaviour matters, not because of which layer produces it.
+			name: "duplicate entry name",
+			doc: `      - parallel:
+          api: echo one
+          api: echo two
+`,
+			substr: "already defined",
+		},
+		{
+			name: "unusable entry name",
+			doc: `      - parallel:
+          "my service": echo hi
+`,
+			substr: "cannot be used as a label",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			path := filepath.Join(dir, "noodge.yaml")
+			writeFile(t, path, `version: 1
+commands:
+  dev:
+    description: Broken group.
+    steps:
+`+tt.doc)
+
+			f, err := Load(path)
+			if err != nil {
+				// Some of these are rejected while decoding, which is also a
+				// refusal to run; the message still has to name the problem.
+				if !strings.Contains(err.Error(), tt.substr) {
+					t.Fatalf("load error should mention %q, got: %v", tt.substr, err)
+				}
+				return
+			}
+
+			d := Validate(f)
+			if _, ok := findDiag(d.Errors(), tt.substr); !ok {
+				t.Errorf("expected an error mentioning %q, got:\n%s", tt.substr, d.Error())
+			}
+		})
+	}
+}

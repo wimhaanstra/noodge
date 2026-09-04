@@ -76,7 +76,8 @@ type Command struct {
 	Params []Param `json:"params,omitempty"`
 
 	// Steps are run in order, each as its own process. The command stops at
-	// the first step that exits non-zero and reports that exit code.
+	// the first step that exits non-zero and reports that exit code. A step
+	// may itself be a parallel group, for running several services together.
 	Steps []Step `json:"steps"`
 
 	// Output describes what the command produces: what it writes to stdout,

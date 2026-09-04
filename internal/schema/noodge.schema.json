@@ -20,7 +20,7 @@
             "$ref": "#/$defs/Step"
           },
           "type": "array",
-          "description": "Steps are run in order, each as its own process. The command stops at\nthe first step that exits non-zero and reports that exit code."
+          "description": "Steps are run in order, each as its own process. The command stops at\nthe first step that exits non-zero and reports that exit code. A step\nmay itself be a parallel group, for running several services together."
         },
         "output": {
           "type": "string",
@@ -127,10 +127,31 @@
           },
           "type": "array",
           "minItems": 1
+        },
+        {
+          "properties": {
+            "parallel": {
+              "additionalProperties": {
+                "$ref": "#/$defs/Step"
+              },
+              "type": "object",
+              "minProperties": 1,
+              "description": "Things to start at once, keyed by a name that labels their output. The group ends when one fails or all of them finish."
+            },
+            "prefix": {
+              "type": "boolean",
+              "description": "Label each output line with the entry it came from. On by default. Labelling requires capturing the output through a pipe, which makes most programs turn their colours off; set this to false to let them write straight to the terminal instead."
+            }
+          },
+          "additionalProperties": false,
+          "type": "object",
+          "required": [
+            "parallel"
+          ]
         }
       ],
       "title": "Step",
-      "description": "One command in the sequence. A string is run through a shell; a list of arguments is executed directly with no shell."
+      "description": "One entry in the sequence. A string is run through a shell; a list of arguments is executed directly with no shell; a parallel group starts its entries at once."
     }
   },
   "properties": {

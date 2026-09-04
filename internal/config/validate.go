@@ -26,6 +26,11 @@ var BuiltinNames = []string{
 // allowed because "start:local" is the idiom this tool was built around.
 var commandNameRE = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9:._-]*$`)
 
+// entryNameRE is what a parallel entry may be called. It is narrower than a
+// command name because the name is printed in front of every line of that
+// entry's output, so it needs to stay short and unambiguous.
+var entryNameRE = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._-]*$`)
+
 // Validate checks a loaded config for semantic problems: things that parse as
 // YAML but do not describe a working set of commands.
 //
@@ -354,12 +359,11 @@ func validateSteps(f *File, nc *NamedCommand, at []step) Diagnostics {
 			continue
 		}
 
-		texts := s.Argv
-		if !s.IsArgv() {
-			texts = []string{s.Line}
+		if s.IsParallel() {
+			d = append(d, validateGroup(f, s, i, path)...)
 		}
 
-		for _, text := range texts {
+		for _, text := range stepTexts(s) {
 			refs, err := template.Parse(text)
 			if err != nil {
 				d = append(d, f.diag(SeverityError,
@@ -403,4 +407,71 @@ func validateSteps(f *File, nc *NamedCommand, at []step) Diagnostics {
 	}
 
 	return d
+}
+
+// validateGroup checks the structure of a parallel group.
+func validateGroup(f *File, s Step, index int, path []step) Diagnostics {
+	var d Diagnostics
+
+	if len(s.Parallel) == 0 {
+		return Diagnostics{f.diag(SeverityError,
+			fmt.Sprintf("step %d is a parallel group with no entries", index+1),
+			"list the things to run at once under parallel:", path...)}
+	}
+
+	seen := map[string]bool{}
+
+	for _, entry := range s.Parallel {
+		switch {
+		case !entryNameRE.MatchString(entry.Name):
+			d = append(d, f.diag(SeverityError,
+				fmt.Sprintf("step %d has a parallel entry named %q, which cannot be used as a label", index+1, entry.Name),
+				"use letters, digits, and any of . _ -", path...))
+
+		case seen[entry.Name]:
+			d = append(d, f.diag(SeverityError,
+				fmt.Sprintf("step %d declares the parallel entry %q twice", index+1, entry.Name),
+				"", path...))
+		}
+		seen[entry.Name] = true
+
+		if entry.Step.IsZero() {
+			d = append(d, f.diag(SeverityError,
+				fmt.Sprintf("parallel entry %q has nothing to run", entry.Name), "", path...))
+		}
+
+		// Nesting would mean groups inside groups, each with its own failure
+		// and output rules. One level covers running services together, and
+		// anything more is better expressed as a command that this one calls.
+		if entry.Step.IsParallel() {
+			d = append(d, f.diag(SeverityError,
+				fmt.Sprintf("parallel entry %q nests another parallel group", entry.Name),
+				"move the inner group into its own command and call it from here", path...))
+		}
+	}
+
+	if len(s.Parallel) == 1 {
+		d = append(d, f.diag(SeverityWarning,
+			fmt.Sprintf("step %d is a parallel group with one entry, which runs it the same as an ordinary step", index+1),
+			"", path...))
+	}
+
+	return d
+}
+
+// stepTexts returns every command text in a step, including the entries of a
+// parallel group, so placeholder checking covers all of them.
+func stepTexts(s Step) []string {
+	switch {
+	case s.IsParallel():
+		var out []string
+		for _, entry := range s.Parallel {
+			out = append(out, stepTexts(entry.Step)...)
+		}
+		return out
+	case s.IsArgv():
+		return s.Argv
+	default:
+		return []string{s.Line}
+	}
 }
