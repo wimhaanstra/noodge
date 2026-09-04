@@ -25,22 +25,26 @@ need() {
     command -v "$1" >/dev/null 2>&1 || die "$1 is required but not installed"
 }
 
+# Every function prefixes its variables, because POSIX sh has no local scope.
+# An unprefixed name inside a function is the same variable as the one in
+# main, and assigning to it silently changes what the caller sees afterwards.
+
 detect_platform() {
-    os=$(uname -s)
-    case "$os" in
-        Linux)  os=linux ;;
-        Darwin) os=darwin ;;
-        *)      die "noodge has no build for $os" ;;
+    dp_os=$(uname -s)
+    case "$dp_os" in
+        Linux)  dp_os=linux ;;
+        Darwin) dp_os=darwin ;;
+        *)      die "noodge has no build for $dp_os" ;;
     esac
 
-    arch=$(uname -m)
-    case "$arch" in
-        x86_64|amd64)  arch=amd64 ;;
-        arm64|aarch64) arch=arm64 ;;
-        *)             die "noodge has no build for $arch" ;;
+    dp_arch=$(uname -m)
+    case "$dp_arch" in
+        x86_64|amd64)  dp_arch=amd64 ;;
+        arm64|aarch64) dp_arch=arm64 ;;
+        *)             die "noodge has no build for $dp_arch" ;;
     esac
 
-    printf '%s_%s' "$os" "$arch"
+    printf '%s_%s' "$dp_os" "$dp_arch"
 }
 
 latest_version() {
@@ -52,25 +56,25 @@ latest_version() {
 }
 
 verify_checksum() {
-    archive="$1"
-    sums="$2"
-    name="$3"
+    vc_file="$1"
+    vc_sums="$2"
+    vc_name="$3"
 
-    expected=$(grep " $name\$" "$sums" | awk '{print $1}' | head -n 1)
-    [ -n "$expected" ] || die "checksums.txt has no entry for $name"
+    vc_expected=$(grep " $vc_name\$" "$vc_sums" | awk '{print $1}' | head -n 1)
+    [ -n "$vc_expected" ] || die "checksums.txt has no entry for $vc_name"
 
     # Linux has sha256sum, macOS has shasum. Neither has both.
     if command -v sha256sum >/dev/null 2>&1; then
-        actual=$(sha256sum "$archive" | awk '{print $1}')
+        vc_actual=$(sha256sum "$vc_file" | awk '{print $1}')
     elif command -v shasum >/dev/null 2>&1; then
-        actual=$(shasum -a 256 "$archive" | awk '{print $1}')
+        vc_actual=$(shasum -a 256 "$vc_file" | awk '{print $1}')
     else
         die "need sha256sum or shasum to verify the download"
     fi
 
-    [ "$actual" = "$expected" ] || die "checksum mismatch for $name
-  expected $expected
-  got      $actual"
+    [ "$vc_actual" = "$vc_expected" ] || die "checksum mismatch for $vc_name
+  expected $vc_expected
+  got      $vc_actual"
 }
 
 main() {
@@ -103,6 +107,8 @@ main() {
 
     step "Installing to $INSTALL_DIR"
     tar -xzf "$work/$archive" -C "$work"
+    [ -f "$work/noodge" ] || die "the archive did not contain a noodge binary"
+
     mkdir -p "$INSTALL_DIR"
     install -m 0755 "$work/noodge" "$INSTALL_DIR/noodge" 2>/dev/null ||
         { cp "$work/noodge" "$INSTALL_DIR/noodge" && chmod 0755 "$INSTALL_DIR/noodge"; }
