@@ -1,0 +1,45 @@
+name: Release
+
+# Only a tag releases. Ordinary commits to main run CI and nothing else, so
+# pushing work in progress can never publish anything.
+#
+#   git tag v0.1.0
+#   git push origin v0.1.0
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          # GoReleaser builds the changelog from the commits since the previous
+          # tag, so it needs the whole history and the tags themselves. The
+          # default shallow checkout leaves it with neither.
+          fetch-depth: 0
+          fetch-tags: true
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          check-latest: true
+
+      # A tag that does not build is a tag that has to be deleted, and a
+      # deleted tag is confusing for anyone who already fetched it. Checking
+      # first costs a minute.
+      - name: Test before releasing
+        run: go test ./...
+
+      - uses: goreleaser/goreleaser-action@v7
+        with:
+          version: "~> v2"
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

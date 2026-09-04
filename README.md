@@ -16,8 +16,32 @@ noodge start:local --host foo      # run one, with its parameters validated
 ```
 
 > **Status: early.** The config format, validation, the JSON Schema, running
-> commands, the browser and shell completion all work. Installers and
-> self-update are still being built.
+> commands, the browser, shell completion and releases all work. Self-update is
+> still being built.
+
+## Installing
+
+**Windows**
+
+```powershell
+irm https://raw.githubusercontent.com/wimhaanstra/noodge/main/scripts/install.ps1 | iex
+```
+
+**macOS and Linux**
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/wimhaanstra/noodge/main/scripts/install.sh | sh
+```
+
+Both verify the download's SHA-256 against the published checksums before
+installing anything, and neither needs administrator rights. A script piped
+into a shell cannot take arguments, so they are configured with environment
+variables — `NOODGE_VERSION`, `NOODGE_INSTALL_DIR`, and `NOODGE_NO_PATH` on
+Windows.
+
+Or download an archive from [Releases](https://github.com/wimhaanstra/noodge/releases)
+and put the binary on your PATH. With Go installed, `go install
+github.com/wimhaanstra/noodge/cmd/noodge@latest` also works.
 
 ## The browser
 
@@ -362,6 +386,23 @@ go run ./tools/gen-schema   # after changing anything in internal/config
 
 The repository has its own `noodge.yaml`, so once you have noodge installed
 you can use it on itself.
+
+## Releasing
+
+Ordinary commits run CI and publish nothing. A release happens when a tag is
+pushed:
+
+```bash
+git tag v0.1.0 && git push origin v0.1.0
+```
+
+That builds Windows, macOS and Linux for amd64 and arm64, writes checksums,
+and publishes a GitHub release with a changelog. To see what a release would
+produce without publishing anything:
+
+```bash
+go run github.com/goreleaser/goreleaser/v2@latest release --snapshot --clean
+```
 
 ## Licence
 

@@ -1,0 +1,94 @@
+# Release configuration. Runs only when a v* tag is pushed; see
+# .github/workflows/release.yml.
+#
+# Try it without publishing anything:
+#   go run github.com/goreleaser/goreleaser/v2@latest release --snapshot --clean
+
+version: 2
+
+project_name: noodge
+
+before:
+  hooks:
+    # Only downloading, never generating: a hook that writes files would dirty
+    # the tree, and GoReleaser refuses to release from a dirty tree.
+    - go mod download
+
+builds:
+  - id: noodge
+    main: ./cmd/noodge
+    binary: noodge
+
+    # No cgo anywhere, so every target cross-compiles from one machine and the
+    # binaries have no libc to be incompatible with.
+    env:
+      - CGO_ENABLED=0
+
+    goos:
+      - windows
+      - darwin
+      - linux
+    goarch:
+      - amd64
+      - arm64
+
+    ldflags:
+      - -s -w
+      - -X github.com/wimhaanstra/noodge/internal/buildinfo.Version={{ .Version }}
+      - -X github.com/wimhaanstra/noodge/internal/buildinfo.Commit={{ .ShortCommit }}
+      - -X github.com/wimhaanstra/noodge/internal/buildinfo.Date={{ .Date }}
+
+    # Reproducible builds: the binary's timestamp comes from the commit rather
+    # than from whenever the release happened to run.
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
+archives:
+  - id: noodge
+    formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - README.md
+      - LICENSE
+
+# Deliberately no UPX. Compressed Go binaries are the single largest avoidable
+# cause of antivirus false positives, and a few megabytes are not worth having
+# users told the tool is malware.
+
+checksum:
+  name_template: checksums.txt
+  algorithm: sha256
+
+changelog:
+  use: github
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+      - "^ci:"
+
+release:
+  draft: false
+  # A tag like v1.0.0-rc.1 publishes as a prerelease without needing to be
+  # remembered at tag time.
+  prerelease: auto
+  footer: |
+    ## Installing
+
+    **Windows**
+
+    ```powershell
+    irm https://raw.githubusercontent.com/wimhaanstra/noodge/main/scripts/install.ps1 | iex
+    ```
+
+    **macOS and Linux**
+
+    ```bash
+    curl -fsSL https://raw.githubusercontent.com/wimhaanstra/noodge/main/scripts/install.sh | sh
+    ```
+
+    Or download an archive below and put the binary on your PATH.
