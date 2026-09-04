@@ -1,0 +1,171 @@
+# noodge
+
+A task runner where every command carries its own documentation.
+
+npm scripts, Makefiles and half-remembered `dotnet run` incantations tell you
+*that* a command exists. They never tell you what it does, what arguments it
+takes, or what it produces. New joiners read the raw command line and guess;
+everyone else keeps the knowledge in their head.
+
+`noodge` reads a `noodge.yaml` from the project you are in and gives you two
+things:
+
+```
+noodge                             # browse the commands, with their docs
+noodge start:local --host foo      # run one, with its parameters validated
+```
+
+> **Status: early.** The config format, validation and the JSON Schema are
+> working. Running commands, the full-screen browser, shell completion and
+> installers are still being built.
+
+## What a noodge.yaml looks like
+
+```yaml
+# yaml-language-server: $schema=https://wimhaanstra.github.io/noodge/schema/v1/noodge.schema.json
+version: 1
+name: my-api
+
+commands:
+  start:
+    description: |
+      Starts the API server against the shared development database.
+
+      Day-to-day command. Hot-reloads on save. Nothing is written to disk,
+      so it is safe to kill at any time.
+    steps:
+      - node myscript.ts
+    output: |
+      Streams the server log to stdout. Listens on http://localhost:3000.
+
+  start:local:
+    description: Starts the API behind a local HTTPS listener.
+    params:
+      - name: host
+        flag: --host
+        type: string
+        default: localhost
+        description: Hostname the server binds to.
+      - name: certificate
+        flag: --certificate
+        short: -c
+        type: path
+        required: true
+        description: Path to the .pfx used for the local HTTPS listener.
+    steps:
+      - node myscript.ts {{flag host}} {{flag certificate}}
+    output: Server log on stdout.
+```
+
+`description` and `output` are the point of the whole thing. They are what the
+browser shows you when you are trying to remember which command to run.
+
+### Placeholders
+
+A parameter has two separate spellings: `name` is the template variable, and
+`flag` is what you type on the command line.
+
+| Placeholder | When the parameter is | Expands to |
+|---|---|---|
+| `{{flag host}}` | set, or defaulted | `--host localhost` |
+| `{{flag host}}` | optional and unset | **nothing at all** |
+| `{{flag verbose}}` | a `bool`, and true | `--verbose` |
+| `{{flag verbose}}` | a `bool`, and false | **nothing at all** |
+| `{{host}}` | set | `localhost` — the value alone |
+| `{{args}}` | — | whatever you typed after `--` |
+
+`{{flag host}}` disappearing entirely when unset is what stops an optional
+parameter leaving a dangling `--host` with nothing after it.
+
+The flag spelling you type to noodge is independent of how it reaches the
+wrapped tool. noodge's own flags follow the usual `--long` convention, but a
+step is plain text, so it can say whatever the tool needs:
+
+```yaml
+steps:
+  - node app.js -host {{host}}              # single dash
+  - msbuild /p:Configuration={{config}}     # slash
+  - java -Xmx{{heap}}m -jar app.jar         # glued together
+```
+
+### Steps
+
+A step written as a **string** runs through a shell, so pipes and redirects
+work. A step written as a **list** is executed directly with no shell at all,
+which is the safer form when a parameter value is untrusted:
+
+```yaml
+steps:
+  - npm run build
+  - ["npm", "pack", "--pack-destination", "./dist"]
+```
+
+Each step is its own process, so "stop at the first failure" is real rather
+than inherited from shell semantics — which matters on Windows, where
+PowerShell 5.1 has no `&&` at all.
+
+## Commands
+
+| | |
+|---|---|
+| `noodge` | List this project's commands (the browser lands in a later release) |
+| `noodge list [--json]` | The same, optionally machine-readable |
+| `noodge validate` | Check `noodge.yaml` and report problems with line numbers |
+| `noodge schema` | Print the JSON Schema |
+| `noodge version` | Print the version |
+
+`-C <dir>` runs against a project elsewhere. `NOODGE_CONFIG` points at a
+specific file.
+
+## Editor support
+
+Put the modeline at the top of your `noodge.yaml` and any editor with the YAML
+language server gets completion and hover text:
+
+```yaml
+# yaml-language-server: $schema=https://wimhaanstra.github.io/noodge/schema/v1/noodge.schema.json
+```
+
+The descriptions come from the Go doc comments in `internal/config`, so the
+schema and the implementation cannot drift apart. CI checks that they haven't.
+
+## Configuration is discovered, not configured
+
+`noodge` walks up from your working directory to the nearest `noodge.yaml`,
+the same way git finds `.git`. It stops at a repository boundary, so a stray
+config in your home directory is never picked up by an unrelated project.
+
+Commands run in the directory holding the config, not wherever you happened to
+be standing, so `noodge build` means the same thing from any subdirectory.
+
+## Errors point at the line
+
+```
+noodge.yaml:8:15: error: flag "-host" must start with two dashes
+  hint: write it as --host. This is only how you type it to noodge; a step is
+        still free to write -host {{host}} to pass it on with a single dash
+```
+
+Missing descriptions are warnings, never errors. A half-written config is
+exactly when you least want an argument with your tooling.
+
+## No telemetry
+
+`noodge` collects nothing and phones home to nobody. The only network request
+it will ever make is an update check, which is cached, never blocks a command,
+and is switched off entirely by `NOODGE_NO_UPDATE_CHECK=1`.
+
+## Building
+
+```bash
+go build ./...
+go test ./...
+go run ./tools/gen-schema   # after changing anything in internal/config
+```
+
+The repository has its own `noodge.yaml`, so once you have noodge installed
+you can use it on itself.
+
+## Licence
+
+MIT. See [LICENSE](LICENSE).

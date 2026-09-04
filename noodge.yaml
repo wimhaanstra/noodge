@@ -1,0 +1,57 @@
+# yaml-language-server: $schema=https://wimhaanstra.github.io/noodge/schema/v1/noodge.schema.json
+version: 1
+name: noodge
+
+commands:
+  build:
+    description: |
+      Compiles every package.
+
+      The fastest check that a change has not broken anything structurally.
+      Does not produce a binary; use `install` for that.
+    steps:
+      - go build ./...
+    output: Nothing on success. Compiler errors on failure.
+
+  test:
+    description: |
+      Runs the whole test suite with the race detector.
+
+      Extra arguments are passed straight through to `go test`, so
+      `noodge test -- -run TestDiscover -v` works without editing this file.
+    steps:
+      - go test -race ./...
+    output: One line per package, then ok or FAIL.
+
+  lint:
+    description: |
+      Runs the same checks CI runs: vet, formatting, and schema drift.
+
+      Run this before pushing and CI should have nothing left to complain
+      about.
+    steps:
+      - go vet ./...
+      - gofmt -l .
+      - go run ./tools/gen-schema
+      - git diff --exit-code internal/schema/noodge.schema.json
+    output: Nothing on success. Offending file names on failure.
+
+  gen-schema:
+    description: |
+      Regenerates the JSON Schema from the doc comments in internal/config.
+
+      Run this after changing any exported type or doc comment in that
+      package, and commit the result. CI fails if the committed schema has
+      drifted from the source.
+    steps:
+      - go run ./tools/gen-schema
+    output: Rewrites internal/schema/noodge.schema.json.
+
+  install:
+    description: |
+      Builds noodge and installs it into your Go bin directory.
+
+      The quickest way to try a change against a real project.
+    steps:
+      - go install ./cmd/noodge
+    output: A noodge binary in $(go env GOPATH)/bin.
