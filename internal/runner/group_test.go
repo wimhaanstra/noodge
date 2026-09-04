@@ -2,43 +2,47 @@ package runner
 
 import (
 	"io"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 )
 
-// The entries of a group really do overlap in time. Run one after the other
-// these two would take at least 800ms; run together they take a little over
-// 400ms, so the bound leaves a wide margin and still fails a sequential
-// implementation.
+// The entries of a group really do overlap in time.
+//
+// Each entry announces itself and then waits for the other to do the same, so
+// both can only succeed if they are running together. Run one after the other,
+// the first waits for a partner that has not been started yet and fails.
+//
+// This was a wall-clock assertion to begin with, and CI showed why that was
+// wrong: under the race detector everything is several times slower, and a
+// sequential run and a parallel one both landed around the same number. A
+// threshold that cannot separate the two cases is not testing anything.
 func TestGroupEntriesRunAtTheSameTime(t *testing.T) {
 	exe := helperPath(t)
+
+	dir := t.TempDir()
+	first := filepath.Join(dir, "first.started")
+	second := filepath.Join(dir, "second.started")
 
 	file := project(t, `version: 1
 commands:
   both:
-    description: Two slow entries.
+    description: Two entries that have to meet.
     steps:
       - parallel:
-          first: [`+yaml(exe)+`, '-noodge-helper', 'sleep', '400', 'first done']
-          second: [`+yaml(exe)+`, '-noodge-helper', 'sleep', '400', 'second done']
+          first: [`+yaml(exe)+`, '-noodge-helper', 'rendezvous', `+yaml(first)+`, `+yaml(second)+`, '5000']
+          second: [`+yaml(exe)+`, '-noodge-helper', 'rendezvous', `+yaml(second)+`, `+yaml(first)+`, '5000']
 `)
 
-	start := time.Now()
 	out, err := execute(t, file, "both", nil, nil)
-	elapsed := time.Since(start)
-
 	if err != nil {
-		t.Fatalf("run: %v\n%s", err, out)
+		t.Fatalf("the entries did not overlap: %v\n%s", err, out)
 	}
-	if elapsed > 750*time.Millisecond {
-		t.Errorf("took %v, which suggests the entries ran one after the other", elapsed)
-	}
-	for _, want := range []string{"first done", "second done"} {
-		if !strings.Contains(out, want) {
-			t.Errorf("missing %q in:\n%s", want, out)
-		}
+
+	if got := strings.Count(out, "met"); got != 2 {
+		t.Errorf("expected both entries to meet, got %d in:\n%s", got, out)
 	}
 }
 
@@ -132,8 +136,10 @@ commands:
 		t.Errorf("exit code: got %d, want 4", exitErr.Code)
 	}
 
-	// The five second sleeper must have been killed, not waited for.
-	if elapsed > 3*time.Second {
+	// The five second sleeper must have been killed, not waited for. The bound
+	// sits below that sleep rather than near the expected time, so it still
+	// separates the two cases when the race detector slows everything down.
+	if elapsed > 4*time.Second {
 		t.Errorf("took %v, so the rest of the group was not stopped", elapsed)
 	}
 	if strings.Contains(out, "server should never get here") {

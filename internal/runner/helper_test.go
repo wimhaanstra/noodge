@@ -53,6 +53,36 @@ func helper(mode string, args []string) int {
 			fmt.Printf("%s=%s\n", a, os.Getenv(a))
 		}
 
+	case "rendezvous":
+		// Announces itself, then waits for its partner to do the same. Two of
+		// these can only both succeed if they are running at the same time,
+		// which is a fact about concurrency rather than about how fast the
+		// machine is.
+		if len(args) < 3 {
+			return 1
+		}
+		mine, theirs := args[0], args[1]
+
+		ms, err := strconv.Atoi(args[2])
+		if err != nil {
+			return 1
+		}
+		if err := os.WriteFile(mine, []byte("here"), 0o644); err != nil {
+			return 1
+		}
+
+		deadline := time.Now().Add(time.Duration(ms) * time.Millisecond)
+		for time.Now().Before(deadline) {
+			if _, err := os.Stat(theirs); err == nil {
+				fmt.Println("met")
+				return 0
+			}
+			time.Sleep(5 * time.Millisecond)
+		}
+
+		fmt.Fprintln(os.Stderr, "timed out waiting for the other entry to start")
+		return 3
+
 	case "spam":
 		// Writes a lot and exits immediately, so the last lines are still in
 		// the pipe when the process itself is already gone.
