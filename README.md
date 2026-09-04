@@ -16,8 +16,8 @@ noodge start:local --host foo      # run one, with its parameters validated
 ```
 
 > **Status: early.** The config format, validation, the JSON Schema, running
-> commands and the browser all work. Shell completion and installers are still
-> being built.
+> commands, the browser and shell completion all work. Installers and
+> self-update are still being built.
 
 ## The browser
 
@@ -160,6 +160,8 @@ PowerShell 5.1 has no `&&` at all.
 | `noodge list [--json]` | List commands, optionally machine-readable |
 | `noodge validate` | Check `noodge.yaml` and report problems with line numbers |
 | `noodge init` | Write a starter `noodge.yaml` |
+| `noodge completion <shell>` | Print the completion script |
+| `noodge completion install <shell>` | Set completion up for you |
 | `noodge schema` | Print the JSON Schema |
 | `noodge version` | Print the version |
 
@@ -190,6 +192,43 @@ replacement for the command it wraps in a script or a CI job. A command stops
 at the first step that fails. noodge's own refusals — a bad config, an unknown
 command, a missing required parameter — exit **2**, and every one of them
 happens before any process starts.
+
+## Tab completion
+
+Completion is **per directory**. The generated script calls back into `noodge`
+on every TAB, running wherever you are, so it offers the commands *this*
+project declares — including their descriptions.
+
+```bash
+noodge completion install powershell
+```
+
+Also `bash`, `zsh` and `fish`. It writes the script to its own file, adds one
+line to your profile, shows you the change first, takes a backup, and does
+nothing the second time you run it. Add `--print-only` to see the plan without
+writing anything.
+
+To do it by hand instead, `noodge completion <shell>` prints the script.
+
+On Windows, the default Tab binding cycles matches inline one at a time and
+**cannot show descriptions** — which for this tool is most of what completion
+is worth. One line fixes it:
+
+```powershell
+Set-PSReadLineKeyHandler -Key Tab -Function MenuComplete
+```
+
+`Ctrl+Space` already shows the menu without rebinding anything.
+
+A `noodge.yaml` you are halfway through editing still completes the commands
+it does contain, and a directory with no config completes the built-ins. The
+completion path never writes to stderr and never exits non-zero, because the
+generated PowerShell script reads the last line of output as an integer — one
+stray message there breaks TAB in a way that is very hard to diagnose.
+
+If completion seems to do nothing in VS Code's integrated terminal, that
+terminal has its own suggestion widget bound to Tab. Turn it off with
+`"terminal.integrated.suggest.enabled": false`.
 
 ## Editor support
 
