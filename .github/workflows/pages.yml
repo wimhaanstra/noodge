@@ -1,0 +1,98 @@
+name: Pages
+
+# The site carries two things noodge itself depends on at runtime:
+#
+#   /schema/v1/noodge.schema.json  the URL in every noodge.yaml modeline
+#   /latest.json                   the update feed
+#
+# The schema changes with the code, and the feed changes with each release, so
+# both triggers rebuild the whole site. One workflow producing all of it means
+# the two can never disagree about which version they describe.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "internal/schema/noodge.schema.json"
+      - ".github/workflows/pages.yml"
+      - "tools/gen-latest/**"
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Never two deployments at once, and let a release supersede an in-flight
+# build rather than queue behind it.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          check-latest: true
+
+      - name: Assemble the site
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p site/schema/v1
+
+          # The schema is committed and CI already fails if it has drifted
+          # from the doc comments, so it is copied rather than regenerated.
+          cp internal/schema/noodge.schema.json site/schema/v1/noodge.schema.json
+
+          # The feed is built from the release's own checksums file, so it can
+          # never describe an artifact that was not published.
+          tag=$(gh release view --json tagName --jq .tagName)
+          notes=$(gh release view --json url --jq .url)
+          published=$(gh release view --json publishedAt --jq .publishedAt)
+
+          gh release download "$tag" --pattern checksums.txt --dir "$RUNNER_TEMP" --clobber
+
+          go run ./tools/gen-latest \
+            -version "${tag#v}" \
+            -published "$published" \
+            -notes "$notes" \
+            -checksums "$RUNNER_TEMP/checksums.txt" \
+            -out site/latest.json
+
+          cat > site/index.html <<'HTML'
+          <!doctype html>
+          <meta charset="utf-8">
+          <title>noodge</title>
+          <meta http-equiv="refresh" content="0; url=https://github.com/wimhaanstra/noodge">
+          <p><a href="https://github.com/wimhaanstra/noodge">noodge</a></p>
+          HTML
+
+          echo "--- site ---"
+          find site -type f
+          echo "--- latest.json ---"
+          cat site/latest.json
+
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5

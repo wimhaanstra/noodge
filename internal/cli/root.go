@@ -73,7 +73,7 @@ func (o *options) load(env *Env) (*config.File, error) {
 
 // configOnlyBuiltins are the commands that must keep working when the config
 // is missing or broken, because they are how you fix it.
-var configOnlyBuiltins = []string{"version", "schema", "init", "help", "completion"}
+var configOnlyBuiltins = []string{"version", "schema", "init", "help", "completion", "upgrade"}
 
 // NewRoot builds the command tree, including the commands declared by the
 // config that opts points at.
@@ -122,6 +122,7 @@ func NewRoot(env *Env, opts *options) (*cobra.Command, error) {
 		newVersionCmd(env),
 		newInitCmd(env, opts),
 		newCompletionCmd(env, opts),
+		newUpgradeCmd(env),
 	)
 
 	file, loadErr := opts.load(env)
@@ -158,6 +159,13 @@ func Execute(env *Env, args []string) int {
 	root.SetArgs(args)
 
 	if err := root.Execute(); err != nil {
+		// A command asking for a particular exit code has already printed
+		// whatever it wanted to say.
+		var coded *exitCodeError
+		if errors.As(err, &coded) {
+			return coded.code
+		}
+
 		// A step that failed owns the exit code; noodge does not editorialise.
 		var exitErr *runner.ExitError
 		if errors.As(err, &exitErr) {

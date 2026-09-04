@@ -15,9 +15,7 @@ noodge                             # browse the commands, with their docs
 noodge start:local --host foo      # run one, with its parameters validated
 ```
 
-> **Status: early.** The config format, validation, the JSON Schema, running
-> commands, the browser, shell completion and releases all work. Self-update is
-> still being built.
+> **Status: early**, but everything described here works.
 
 ## Installing
 
@@ -393,6 +391,36 @@ go run ./tools/gen-schema   # after changing anything in internal/config
 
 The repository has its own `noodge.yaml`, so once you have noodge installed
 you can use it on itself.
+
+## Updating
+
+```bash
+noodge upgrade
+```
+
+Downloads the latest release, checks it against the published checksum, and
+replaces the running binary.
+
+noodge tells you when a newer version exists, but never updates itself. The
+check happens at most once a day, runs alongside your command rather than
+before it, and is never waited for — so it costs your command nothing, and the
+notice you see comes from what a previous run already learned. It goes to
+stderr, and is skipped entirely in CI, when output is redirected, on a
+development build, and whenever `NOODGE_NO_UPDATE_CHECK` is set.
+
+If a package manager installed noodge, `upgrade` refuses and tells you what to
+run instead:
+
+```
+noodge: this noodge was installed by Scoop, which keeps its own record of the
+installed version. Upgrading in place would leave Scoop believing the old
+version is still installed, and its next update would put it back.
+
+  scoop update noodge
+```
+
+`noodge upgrade --check` reports without changing anything, exiting **10** when
+an upgrade is available so a script can branch on it.
 
 ## Releasing
 
