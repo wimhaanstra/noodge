@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"text/tabwriter"
 
@@ -205,4 +207,94 @@ func plural(n int, word string) string {
 		return fmt.Sprintf("%d %s", n, word)
 	}
 	return fmt.Sprintf("%d %ss", n, word)
+}
+
+func newRunCmd(env *Env, opts *options, file *config.File) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "run <command> [flags] [-- args]",
+		Short: "Run a command from noodge.yaml by name",
+		Long: "Runs a command declared in noodge.yaml.\n\n" +
+			"Every command is also available directly, as 'noodge <command>'. This form\n" +
+			"exists for the case where a command shares a name with one of noodge's own:\n" +
+			"'noodge list' runs the built-in, and 'noodge run list' runs yours.\n\n" +
+			"Hidden commands are reachable here too.",
+		SilenceUsage:  true,
+		SilenceErrors: true,
+	}
+
+	// Cobra commands hold a pointer to their parent, so the tree is built a
+	// second time rather than shared with the root.
+	cmd.AddCommand(buildCommands(env, opts, file)...)
+	return cmd
+}
+
+// starterConfig is what noodge init writes. It is deliberately a working
+// example rather than an empty skeleton: the fastest way to learn the format
+// is to edit something that already runs.
+const starterConfig = `# yaml-language-server: $schema=https://wimhaanstra.github.io/noodge/schema/v1/noodge.schema.json
+version: 1
+name: %s
+
+commands:
+  hello:
+    description: |
+      A placeholder so you can check noodge works.
+
+      Replace this with something your project actually needs, and write the
+      description for whoever joins next month.
+    steps:
+      - echo Hello from noodge
+    output: One line on stdout.
+
+  greet:
+    description: Shows how parameters work.
+    params:
+      - name: name
+        flag: --name
+        type: string
+        default: world
+        description: Who to greet.
+      - name: loud
+        flag: --loud
+        type: bool
+        description: Shout it.
+    steps:
+      # {{flag loud}} disappears entirely when --loud is not passed, so no
+      # empty flag is left behind.
+      - echo Hello {{name}} {{flag loud}}
+    output: One line on stdout.
+`
+
+func newInitCmd(env *Env, opts *options) *cobra.Command {
+	return &cobra.Command{
+		Use:   "init",
+		Short: "Create a starter noodge.yaml",
+		Args:  cobra.NoArgs,
+		RunE: func(*cobra.Command, []string) error {
+			return runInit(env, opts)
+		},
+	}
+}
+
+func runInit(env *Env, opts *options) error {
+	dir, err := opts.startDir(env)
+	if err != nil {
+		return err
+	}
+
+	path := filepath.Join(dir, "noodge.yaml")
+	if _, err := os.Stat(path); err == nil {
+		return fmt.Errorf("%s already exists", path)
+	}
+
+	name := filepath.Base(dir)
+	content := fmt.Sprintf(starterConfig, name)
+
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		return err
+	}
+
+	fmt.Fprintf(env.Stdout, "created %s\n", path)
+	fmt.Fprintln(env.Stdout, "run 'noodge' to see what it declares")
+	return nil
 }

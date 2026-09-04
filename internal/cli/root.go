@@ -6,13 +6,17 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"slices"
+	"sort"
+	"strings"
 
 	"github.com/spf13/cobra"
 
 	"github.com/wimhaanstra/noodge/internal/config"
+	"github.com/wimhaanstra/noodge/internal/runner"
 )
 
-// Exit codes. A step's own exit code passes through verbatim, so noodge's
+// Exit codes. A step's exit code passes through verbatim, so noodge's own
 // failures use a code it can only mean itself. Every one of these happens
 // before any child process starts, so there is no ambiguity in practice.
 const (
@@ -28,6 +32,7 @@ const (
 type Env struct {
 	Stdout io.Writer
 	Stderr io.Writer
+	Stdin  io.Reader
 	// Dir is where config discovery starts. Empty means the working directory.
 	Dir string
 }
@@ -36,9 +41,10 @@ type Env struct {
 type options struct {
 	// directory overrides where discovery starts.
 	directory string
+	// dryRun prints what would run instead of running it.
+	dryRun bool
 }
 
-// startDir returns the directory config discovery should begin in.
 func (o *options) startDir(env *Env) (string, error) {
 	if o.directory != "" {
 		return o.directory, nil
@@ -49,25 +55,26 @@ func (o *options) startDir(env *Env) (string, error) {
 	return os.Getwd()
 }
 
-// load discovers and loads the config, turning the two "no usable config"
-// cases into errors that already read well.
+// load discovers and loads the config.
 func (o *options) load(env *Env) (*config.File, error) {
+	if path := os.Getenv("NOODGE_CONFIG"); path != "" {
+		return config.Load(path)
+	}
+
 	dir, err := o.startDir(env)
 	if err != nil {
 		return nil, err
 	}
-
-	path := os.Getenv("NOODGE_CONFIG")
-	if path != "" {
-		return config.Load(path)
-	}
 	return config.LoadFrom(dir)
 }
 
-// NewRoot builds the full command tree.
-func NewRoot(env *Env) *cobra.Command {
-	opts := &options{}
+// configOnlyBuiltins are the commands that must keep working when the config
+// is missing or broken, because they are how you fix it.
+var configOnlyBuiltins = []string{"version", "schema", "init", "help", "completion"}
 
+// NewRoot builds the command tree, including the commands declared by the
+// config that opts points at.
+func NewRoot(env *Env, opts *options) (*cobra.Command, error) {
 	root := &cobra.Command{
 		Use:   "noodge",
 		Short: "Run and discover a project's documented commands",
@@ -80,7 +87,7 @@ func NewRoot(env *Env) *cobra.Command {
 		// Bare noodge lists the commands. The full-screen browser arrives in a
 		// later milestone; listing is also the required behaviour whenever
 		// output is not a terminal, so it is never wasted.
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(*cobra.Command, []string) error {
 			return runList(env, opts, false)
 		},
 	}
@@ -88,34 +95,104 @@ func NewRoot(env *Env) *cobra.Command {
 	root.SetOut(env.Stdout)
 	root.SetErr(env.Stderr)
 
-	root.PersistentFlags().StringVarP(&opts.directory, "directory", "C", "",
+	// The default is the value already in opts, not "". StringVarP writes the
+	// default into the target as it registers, so passing "" here would undo
+	// the pre-scan that found -C in the first place, and the flag would be
+	// silently ignored.
+	root.PersistentFlags().StringVarP(&opts.directory, "directory", "C", opts.directory,
 		"start looking for noodge.yaml in this directory instead of the current one")
+	root.PersistentFlags().BoolVar(&opts.dryRun, "dry-run", false,
+		"print the exact command lines that would run, and run nothing")
 
 	root.AddCommand(
 		newListCmd(env, opts),
 		newValidateCmd(env, opts),
 		newSchemaCmd(env),
 		newVersionCmd(env),
+		newInitCmd(env, opts),
 	)
 
-	return root
+	file, loadErr := opts.load(env)
+	if loadErr != nil {
+		return root, loadErr
+	}
+
+	commands := buildCommands(env, opts, file)
+	root.AddCommand(commands...)
+
+	// run addresses a config command unambiguously, which is the escape hatch
+	// when one shares a name with a built-in.
+	root.AddCommand(newRunCmd(env, opts, file))
+
+	return root, nil
 }
 
 // Execute runs the command tree and returns the process exit code.
 func Execute(env *Env, args []string) int {
-	root := NewRoot(env)
+	opts := &options{
+		// The config has to be read before the tree can be built, but the flag
+		// that says where to read it from is only parsed once the tree exists.
+		// Reading it out of the raw arguments first breaks that circle.
+		directory: preScanDirectory(args),
+	}
+
+	root, loadErr := NewRoot(env, opts)
+
+	if loadErr != nil && !allowedWithoutConfig(args) {
+		report(env, loadErr)
+		return ExitConfig
+	}
+
 	root.SetArgs(args)
 
 	if err := root.Execute(); err != nil {
+		// A step that failed owns the exit code; noodge does not editorialise.
+		var exitErr *runner.ExitError
+		if errors.As(err, &exitErr) {
+			fmt.Fprintf(env.Stderr, "noodge: %v\n", err)
+			return exitErr.Code
+		}
+
 		report(env, err)
 		return ExitConfig
 	}
+
 	return ExitOK
 }
 
-// report prints an error the way its type deserves. A missing config is the
-// most common first experience with the tool, so it gets a next step rather
-// than just a complaint.
+// allowedWithoutConfig reports whether the invocation is one that must still
+// work when there is no usable config.
+func allowedWithoutConfig(args []string) bool {
+	for _, a := range args {
+		if strings.HasPrefix(a, "-") {
+			continue
+		}
+		return slices.Contains(configOnlyBuiltins, a)
+	}
+
+	// Bare noodge, or only flags: listing handles a missing config itself, and
+	// a broken one should be reported.
+	return true
+}
+
+// preScanDirectory finds -C or --directory in raw arguments.
+func preScanDirectory(args []string) string {
+	for i, a := range args {
+		switch {
+		case a == "-C" || a == "--directory":
+			if i+1 < len(args) {
+				return args[i+1]
+			}
+		case strings.HasPrefix(a, "--directory="):
+			return strings.TrimPrefix(a, "--directory=")
+		case strings.HasPrefix(a, "-C="):
+			return strings.TrimPrefix(a, "-C=")
+		}
+	}
+	return ""
+}
+
+// report prints an error the way its type deserves.
 func report(env *Env, err error) {
 	// A command that has already printed its own diagnostics returns this, so
 	// the summary it just wrote is not followed by a redundant second line.
@@ -131,4 +208,14 @@ func report(env *Env, err error) {
 	}
 
 	fmt.Fprintf(env.Stderr, "noodge: %v\n", err)
+}
+
+// sortedEnv renders an environment map as stable KEY=value lines.
+func sortedEnv(env map[string]string) []string {
+	out := make([]string, 0, len(env))
+	for k, v := range env {
+		out = append(out, k+"="+v)
+	}
+	sort.Strings(out)
+	return out
 }
