@@ -1,0 +1,11 @@
+version: 1
+commands:
+  build:
+    description: Builds the thing.
+    steps:
+      - go build ./...
+  test:
+    description: Runs tests.
+    steps:
+      - go test ./...
+      this is not: [valid yaml

@@ -1,0 +1,5 @@
+version: 99
+commands:
+  whatever:
+    steps:
+      - echo hi

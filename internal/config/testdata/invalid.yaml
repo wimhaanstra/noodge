@@ -1,0 +1,21 @@
+version: 1
+
+commands:
+  bad:
+    description: A command with deliberate mistakes.
+    params:
+      - name: host
+        flag: -host
+        description: Single-dash long flag, which pflag cannot express.
+      - name: mode
+        flag: --mode
+        type: enum
+        description: An enum with no values.
+      - name: unused
+        flag: --unused
+        description: Declared but never referenced by a step.
+    steps:
+      - node app.js {{flag host}} {{flag mode}} {{flag nosuch}}
+
+  nosteps:
+    description: Has no steps at all.

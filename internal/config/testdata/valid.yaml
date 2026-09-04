@@ -1,0 +1,51 @@
+version: 1
+name: my-api
+
+env:
+  NODE_ENV: development
+
+commands:
+  start:
+    description: |
+      Starts the API server against the shared development database.
+
+      Day-to-day command. Hot-reloads on save.
+    steps:
+      - node myscript.ts
+    output: |
+      Streams the server log to stdout.
+
+  start:local:
+    description: Starts the API behind a local HTTPS listener.
+    aliases: [sl]
+    cwd: .
+    env:
+      NODE_ENV: local
+    params:
+      - name: host
+        flag: --host
+        type: string
+        default: localhost
+        description: Hostname the server binds to.
+      - name: certificate
+        flag: --certificate
+        short: -c
+        type: path
+        required: true
+        description: Path to the .pfx used for the local HTTPS listener.
+      - name: verbose
+        flag: --verbose
+        type: bool
+        description: Enables per-request logging.
+    steps:
+      - node myscript.ts {{flag host}} {{flag certificate}} {{flag verbose}}
+    output: Server log on stdout.
+
+  release:
+    description: Builds, tests and packages a release artifact.
+    hidden: true
+    steps:
+      - npm run build
+      - npm test {{args}}
+      - ["npm", "pack", "--pack-destination", "./dist"]
+    output: A tarball in ./dist.
