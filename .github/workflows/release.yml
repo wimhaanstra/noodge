@@ -47,3 +47,15 @@ jobs:
           # which the built-in token cannot do. If this secret is not set the
           # release still succeeds and simply skips Scoop.
           SCOOP_BUCKET_TOKEN: ${{ secrets.SCOOP_BUCKET_TOKEN }}
+
+  # The site carries the update feed, which has to describe the release that
+  # was just published. It is called rather than triggered: a "release
+  # published" event raised with the built-in GITHUB_TOKEN does not start a
+  # workflow run, so waiting for one would wait forever.
+  pages:
+    needs: release
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    uses: ./.github/workflows/pages.yml

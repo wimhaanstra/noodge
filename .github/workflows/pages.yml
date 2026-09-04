@@ -8,6 +8,11 @@ name: Pages
 # The schema changes with the code, and the feed changes with each release, so
 # both triggers rebuild the whole site. One workflow producing all of it means
 # the two can never disagree about which version they describe.
+# Deliberately not "release: types: [published]". GoReleaser publishes the
+# release using the workflow's built-in GITHUB_TOKEN, and GitHub does not start
+# a new workflow run from an event that token created — an anti-recursion rule
+# with no exception for this case. That trigger fires for nothing, so the
+# release workflow calls this one directly instead.
 on:
   push:
     branches: [main]
@@ -15,8 +20,7 @@ on:
       - "internal/schema/noodge.schema.json"
       - ".github/workflows/pages.yml"
       - "tools/gen-latest/**"
-  release:
-    types: [published]
+  workflow_call:
   workflow_dispatch:
 
 permissions:
