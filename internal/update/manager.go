@@ -1,9 +1,6 @@
 package update
 
-import (
-	"path/filepath"
-	"strings"
-)
+import "strings"
 
 // Manager is a package manager that owns an installed copy of noodge.
 type Manager struct {
@@ -38,7 +35,11 @@ var managers = []struct {
 // installed, so the next 'scoop update' silently puts the user back where they
 // started — a bug that is very hard to diagnose from the outside.
 func DetectManager(path string) (Manager, bool) {
-	needle := strings.ToLower(filepath.ToSlash(path))
+	// Not filepath.ToSlash: that converts the separator of whatever platform
+	// this is compiled for, so on Linux it leaves a Windows path's backslashes
+	// exactly as they are and nothing ever matches. Replacing explicitly makes
+	// the detection depend on the path rather than on the host.
+	needle := strings.ToLower(strings.ReplaceAll(path, `\`, "/"))
 
 	for _, m := range managers {
 		if strings.Contains(needle, m.fragment) {
