@@ -26,7 +26,34 @@ func registerFlags(cmd *cobra.Command, nc *config.NamedCommand) {
 			cmd.Flags().BoolP(name, short, false, usage)
 			continue
 		}
+
 		cmd.Flags().StringP(name, short, "", usage)
+		registerValueCompletion(cmd, name, p)
+	}
+}
+
+// registerValueCompletion decides what TAB offers for a flag's value.
+//
+// An enum completes its declared values, which is the config author's list
+// arriving in the shell for free. Anything that is not a path completes
+// nothing rather than falling back to the working directory's files, since
+// offering to complete --host with a list of filenames is only ever noise.
+func registerValueCompletion(cmd *cobra.Command, name string, p config.Param) {
+	switch p.ResolvedType() {
+	case config.TypeEnum:
+		_ = cmd.RegisterFlagCompletionFunc(name,
+			func(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective) {
+				return p.Values, cobra.ShellCompDirectiveNoFileComp
+			})
+
+	case config.TypePath:
+		// Leave the default, which is the shell's own file completion.
+
+	default:
+		_ = cmd.RegisterFlagCompletionFunc(name,
+			func(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective) {
+				return nil, cobra.ShellCompDirectiveNoFileComp
+			})
 	}
 }
 

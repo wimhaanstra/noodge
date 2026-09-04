@@ -87,6 +87,9 @@ func NewRoot(env *Env, opts *options) (*cobra.Command, error) {
 			"requests other than an update check you can turn off.",
 		SilenceUsage:  true,
 		SilenceErrors: true,
+		// Cobra's own completion command cannot carry an install subcommand,
+		// and its PowerShell output misses the noodge.exe alias.
+		CompletionOptions: cobra.CompletionOptions{DisableDefaultCmd: true},
 		// Bare noodge opens the browser when there is a terminal to draw on,
 		// and lists otherwise. Listing is not a fallback so much as the
 		// correct answer in a pipe, in CI, or under a shell that cannot give
@@ -118,6 +121,7 @@ func NewRoot(env *Env, opts *options) (*cobra.Command, error) {
 		newSchemaCmd(env),
 		newVersionCmd(env),
 		newInitCmd(env, opts),
+		newCompletionCmd(env, opts),
 	)
 
 	file, loadErr := opts.load(env)
