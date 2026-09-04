@@ -35,6 +35,9 @@ type Env struct {
 	Stdin  io.Reader
 	// Dir is where config discovery starts. Empty means the working directory.
 	Dir string
+	// TTY reports whether the browser can be shown. False in a pipe, in CI,
+	// and in every test.
+	TTY bool
 }
 
 // options holds the values of the persistent flags.
@@ -84,10 +87,15 @@ func NewRoot(env *Env, opts *options) (*cobra.Command, error) {
 			"requests other than an update check you can turn off.",
 		SilenceUsage:  true,
 		SilenceErrors: true,
-		// Bare noodge lists the commands. The full-screen browser arrives in a
-		// later milestone; listing is also the required behaviour whenever
-		// output is not a terminal, so it is never wasted.
+		// Bare noodge opens the browser when there is a terminal to draw on,
+		// and lists otherwise. Listing is not a fallback so much as the
+		// correct answer in a pipe, in CI, or under a shell that cannot give
+		// a native program a console.
 		RunE: func(*cobra.Command, []string) error {
+			if env.TTY && !opts.dryRun {
+				return runBrowse(env, opts)
+			}
+			noteIfMintty(env)
 			return runList(env, opts, false)
 		},
 	}

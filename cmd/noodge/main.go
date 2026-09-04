@@ -13,6 +13,7 @@ func main() {
 		Stdout: os.Stdout,
 		Stderr: os.Stderr,
 		Stdin:  os.Stdin,
+		TTY:    cli.DetectTTY(),
 	}
 	os.Exit(cli.Execute(env, os.Args[1:]))
 }

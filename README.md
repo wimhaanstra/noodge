@@ -15,9 +15,55 @@ noodge                             # browse the commands, with their docs
 noodge start:local --host foo      # run one, with its parameters validated
 ```
 
-> **Status: early.** The config format, validation, the JSON Schema and
-> running commands all work. The full-screen browser, shell completion and
-> installers are still being built.
+> **Status: early.** The config format, validation, the JSON Schema, running
+> commands and the browser all work. Shell completion and installers are still
+> being built.
+
+## The browser
+
+Run `noodge` with no arguments and you get commands on the left, their full
+documentation on the right:
+
+```
+noodge  D:\dev\noodge\noodge.yaml
+
+                    |
+> build             | build
+  test              |
+  test:race         | Compiles every package.
+  lint              |
+  install           | The fastest check that a change has not broken anything
+                    | structurally. Does not produce a binary; use install for
+                    | that.
+                    |
+                    | Output
+                    | Nothing on success. Compiler errors on failure.
+                    |
+                    | Steps
+                    | 1. go build ./...
+
+up/down move   enter run   / filter   q quit
+```
+
+`/` filters on names *and* descriptions, so a word you half-remember from the
+docs finds the command.
+
+If the command takes parameters, Enter opens a form — required ones first,
+defaults pre-filled, each with its description beside it. Confirming prints
+the equivalent command line before running it, so the browser teaches the
+command line rather than replacing it:
+
+```
+noodge start:local --certificate dev.pfx --host localhost --verbose
+```
+
+The browser never runs anything itself. It hands back a command name and its
+arguments, and those go through exactly the same path a typed invocation does
+— so the command inherits the real terminal, keeps its colours, can prompt for
+input, and reports its own exit code.
+
+In a pipe, in CI, or anywhere without a terminal, `noodge` lists instead. That
+is the correct answer rather than a fallback.
 
 ## What a noodge.yaml looks like
 
