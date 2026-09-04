@@ -39,6 +39,13 @@ into a shell cannot take arguments, so they are configured with environment
 variables — `NOODGE_VERSION`, `NOODGE_INSTALL_DIR`, and `NOODGE_NO_PATH` on
 Windows.
 
+**Scoop**
+
+```powershell
+scoop bucket add wimhaanstra https://github.com/wimhaanstra/scoop-bucket
+scoop install noodge
+```
+
 Or download an archive from [Releases](https://github.com/wimhaanstra/noodge/releases)
 and put the binary on your PATH. With Go installed, `go install
 github.com/wimhaanstra/noodge/cmd/noodge@latest` also works.

@@ -43,3 +43,7 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Publishing the Scoop manifest writes to a different repository,
+          # which the built-in token cannot do. If this secret is not set the
+          # release still succeeds and simply skips Scoop.
+          SCOOP_BUCKET_TOKEN: ${{ secrets.SCOOP_BUCKET_TOKEN }}

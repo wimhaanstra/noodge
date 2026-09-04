@@ -92,3 +92,33 @@ release:
     ```
 
     Or download an archive below and put the binary on your PATH.
+
+scoops:
+  - repository:
+      owner: wimhaanstra
+      name: scoop-bucket
+      branch: main
+      # A different repository than the one being released, so the workflow's
+      # built-in GITHUB_TOKEN cannot write to it and a personal access token
+      # is required. `index .Env` rather than `.Env.X` so that a missing
+      # secret yields an empty string instead of failing the whole release.
+      token: '{{ index .Env "SCOOP_BUCKET_TOKEN" }}'
+
+    # Manifests go at the repository root. Scoop will read them from a bucket/
+    # subdirectory too, but `scoop bucket list` then reports the bucket as
+    # having no apps in it.
+    directory: ""
+
+    homepage: https://github.com/wimhaanstra/noodge
+    description: A task runner where every command carries its own documentation.
+    license: MIT
+
+    commit_author:
+      name: Wim Haanstra
+      email: 111713+wimhaanstra@users.noreply.github.com
+    commit_msg_template: "chore: noodge {{ .Tag }}"
+
+    # Without a token, publish nothing rather than failing a release that has
+    # otherwise succeeded. With one, `auto` still skips prereleases, so a
+    # v1.0.0-rc.1 tag never becomes what `scoop install noodge` hands people.
+    skip_upload: '{{ if index .Env "SCOOP_BUCKET_TOKEN" }}auto{{ else }}true{{ end }}'
