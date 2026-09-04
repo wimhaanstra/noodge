@@ -200,13 +200,19 @@ on every TAB, running wherever you are, so it offers the commands *this*
 project declares — including their descriptions.
 
 ```bash
-noodge completion install powershell
+noodge completion install pwsh
 ```
 
-Also `bash`, `zsh` and `fish`. It writes the script to its own file, adds one
-line to your profile, shows you the change first, takes a backup, and does
-nothing the second time you run it. Add `--print-only` to see the plan without
-writing anything.
+Targets are `pwsh`, `windows-powershell`, `bash`, `zsh` and `fish`. It writes
+the script to its own file, adds one line to your profile, shows you the change
+first, takes a backup, and does nothing the second time you run it. Add
+`--print-only` to see the plan without writing anything.
+
+The two PowerShell editions are named separately because they do not share a
+profile — PowerShell 7 uses `Documents\PowerShell`, Windows PowerShell 5.1 uses
+`Documents\WindowsPowerShell`. Installing for the wrong one leaves you with no
+completion and no clue why, so when both are present `noodge` asks which you
+mean rather than guessing.
 
 To do it by hand instead, `noodge completion <shell>` prints the script.
 

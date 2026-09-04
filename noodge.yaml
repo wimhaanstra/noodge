@@ -3,6 +3,13 @@ version: 1
 name: noodge
 
 commands:
+  create:
+    description: |
+      Creates a new executable in the noodge folder
+    steps:
+      - go build -o noodge.exe ./cmd/noodge
+    output: A noodge.exe binary in the current directory.
+
   build:
     description: |
       Compiles every package.

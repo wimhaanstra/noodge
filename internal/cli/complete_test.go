@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -304,4 +305,54 @@ func lastLines(s string, n int) string {
 		lines = lines[len(lines)-n:]
 	}
 	return strings.Join(lines, "\n")
+}
+
+// On Windows both PowerShell editions are commonly installed and they do not
+// share a profile, so installing for the wrong one leaves the user with no
+// completion and no explanation. Each edition is nameable.
+func TestInstallTargetsNameBothPowerShellEditions(t *testing.T) {
+	for _, want := range []string{"pwsh", "windows-powershell"} {
+		found := false
+		for _, target := range installTargets {
+			if target == want {
+				found = true
+			}
+		}
+		if !found {
+			t.Errorf("%q should be an install target, got %v", want, installTargets)
+		}
+	}
+}
+
+// Both editions run the same script; they differ only in which profile loads
+// it, which is an install concern rather than a generator one.
+func TestBothPowerShellTargetsGenerateTheSameScript(t *testing.T) {
+	dir := projectDir(t, echoConfig)
+
+	base, _, code := run(t, dir, "completion", "powershell")
+	if code != ExitOK {
+		t.Fatalf("exit %d", code)
+	}
+
+	for _, target := range []string{"pwsh", "windows-powershell"} {
+		t.Run(target, func(t *testing.T) {
+			// The generator is reached directly: these names are install
+			// targets, not arguments to the completion command itself.
+			root, err := NewRoot(&Env{Stdout: io.Discard, Stderr: io.Discard, Dir: dir}, &options{directory: dir})
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			got, err := completionScript(root, target)
+			if err != nil {
+				t.Fatalf("completionScript(%s): %v", target, err)
+			}
+			if !strings.Contains(got, "-CommandName 'noodge.exe'") {
+				t.Error("the .exe alias should be registered for this target too")
+			}
+			if len(got) != len(base) {
+				t.Errorf("script differs in length from the powershell one: %d vs %d", len(got), len(base))
+			}
+		})
+	}
 }

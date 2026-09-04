@@ -24,6 +24,11 @@ const (
 	markerEnd   = "# <<< noodge completion <<<"
 )
 
+// installTargets are what install accepts. It is the four shells plus the two
+// PowerShell editions named individually, because on Windows they have
+// separate profiles and "powershell" alone is often ambiguous.
+var installTargets = append(append([]string{}, shells...), "pwsh", "windows-powershell")
+
 func newCompletionInstallCmd(env *Env, opts *options) *cobra.Command {
 	var printOnly, assumeYes bool
 
@@ -35,7 +40,7 @@ profile that loads it.
 
 The change is shown before anything is written, your profile is backed up
 first, and running this twice makes no second change.`,
-		ValidArgs: shells,
+		ValidArgs: installTargets,
 		Args:      cobra.MatchAll(cobra.ExactArgs(1), cobra.OnlyValidArgs),
 		RunE: func(c *cobra.Command, args []string) error {
 			return runCompletionInstall(c.Root(), env, args[0], printOnly, assumeYes)
@@ -154,17 +159,8 @@ func planInstall(shell string) (installPlan, error) {
 			Line:        fmt.Sprintf("[ -f %s ] && . %s", shQuote(script), shQuote(script)),
 		}, nil
 
-	case "powershell":
-		profile, err := powerShellProfile()
-		if err != nil {
-			return installPlan{}, err
-		}
-		script := filepath.Join(filepath.Dir(profile), "noodge.completion.ps1")
-		return installPlan{
-			ScriptPath:  script,
-			ProfilePath: profile,
-			Line:        fmt.Sprintf(". %s", psQuote(script)),
-		}, nil
+	case "pwsh", "windows-powershell", "powershell":
+		return planPowerShell(shell)
 	}
 
 	return installPlan{}, fmt.Errorf("unknown shell %q", shell)
@@ -184,30 +180,92 @@ func shQuote(s string) string {
 	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
 
-// powerShellProfile asks PowerShell where its profile is.
+// powerShellEditions maps an explicit install target to the interpreter whose
+// profile it means.
+var powerShellEditions = map[string]string{
+	"pwsh":               "pwsh",
+	"windows-powershell": "powershell",
+}
+
+// planPowerShell works out which PowerShell to set up.
 //
-// The path differs between Windows PowerShell 5.1 (Documents\WindowsPowerShell)
-// and PowerShell 7 (Documents\PowerShell), and OneDrive redirects Documents on
-// many machines, so guessing it wrong is the normal outcome. Asking the shell
-// itself is the only reliable answer.
-func powerShellProfile() (string, error) {
-	for _, exe := range []string{"pwsh", "powershell"} {
-		path, err := exec.LookPath(exe)
+// Windows commonly has both editions installed and they do not share a
+// profile: PowerShell 7 uses Documents\PowerShell, Windows PowerShell 5.1 uses
+// Documents\WindowsPowerShell. Picking one silently means whoever runs the
+// other gets no completion and no explanation of why, which is a far worse
+// failure than being asked to say which one they meant.
+func planPowerShell(target string) (installPlan, error) {
+	if exe, ok := powerShellEditions[target]; ok {
+		profile, err := powerShellProfile(exe)
 		if err != nil {
-			continue
+			return installPlan{}, err
 		}
+		return powerShellPlan(profile), nil
+	}
 
-		out, err := exec.Command(path, "-NoProfile", "-NonInteractive", "-Command", "$PROFILE").Output()
-		if err != nil {
-			continue
-		}
-
-		if profile := strings.TrimSpace(string(out)); profile != "" {
-			return profile, nil
+	var found []string
+	for _, name := range []string{"pwsh", "powershell"} {
+		if _, err := exec.LookPath(name); err == nil {
+			found = append(found, name)
 		}
 	}
 
-	return "", fmt.Errorf("could not find PowerShell to ask where its profile lives")
+	switch len(found) {
+	case 0:
+		return installPlan{}, fmt.Errorf("could not find PowerShell to ask where its profile lives")
+
+	case 1:
+		profile, err := powerShellProfile(found[0])
+		if err != nil {
+			return installPlan{}, err
+		}
+		return powerShellPlan(profile), nil
+
+	default:
+		return installPlan{}, fmt.Errorf(
+			"both PowerShell editions are installed, and they do not share a profile.\n" +
+				"Say which one you use:\n" +
+				"  PowerShell 7:           noodge completion install pwsh\n" +
+				"  Windows PowerShell 5.1: noodge completion install windows-powershell")
+	}
+}
+
+// isPowerShell reports whether a target is one of the PowerShell editions.
+func isPowerShell(target string) bool {
+	_, named := powerShellEditions[target]
+	return named || target == "powershell"
+}
+
+func powerShellPlan(profile string) installPlan {
+	script := filepath.Join(filepath.Dir(profile), "noodge.completion.ps1")
+	return installPlan{
+		ScriptPath:  script,
+		ProfilePath: profile,
+		Line:        fmt.Sprintf(". %s", psQuote(script)),
+	}
+}
+
+// powerShellProfile asks a PowerShell where its profile is.
+//
+// The path differs between editions, and OneDrive redirects Documents on many
+// machines — often under a localised name, so "Documents" is not even the
+// right word to look for. Asking the shell itself is the only reliable answer.
+func powerShellProfile(exe string) (string, error) {
+	path, err := exec.LookPath(exe)
+	if err != nil {
+		return "", fmt.Errorf("%s is not installed", exe)
+	}
+
+	out, err := exec.Command(path, "-NoProfile", "-NonInteractive", "-Command", "$PROFILE").Output()
+	if err != nil {
+		return "", fmt.Errorf("asking %s where its profile lives: %w", exe, err)
+	}
+
+	profile := strings.TrimSpace(string(out))
+	if profile == "" {
+		return "", fmt.Errorf("%s reported no profile path", exe)
+	}
+	return profile, nil
 }
 
 func profileHasMarker(path string) (bool, error) {

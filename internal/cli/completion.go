@@ -43,8 +43,15 @@ showing you the change first.`,
 }
 
 // completionScript generates the script for one shell.
+//
+// The two PowerShell editions share a script; they differ only in which
+// profile loads it, which is an install concern rather than a generator one.
 func completionScript(root *cobra.Command, shell string) (string, error) {
 	var buf bytes.Buffer
+
+	if shell == "pwsh" || shell == "windows-powershell" {
+		shell = "powershell"
+	}
 
 	switch shell {
 	case "bash":
