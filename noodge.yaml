@@ -15,13 +15,24 @@ commands:
 
   test:
     description: |
-      Runs the whole test suite with the race detector.
+      Runs the whole test suite.
 
       Extra arguments are passed straight through to `go test`, so
       `noodge test -- -run TestDiscover -v` works without editing this file.
     steps:
-      - go test -race ./...
+      - go test ./...
     output: One line per package, then ok or FAIL.
+
+  test:race:
+    description: |
+      Runs the test suite with the race detector.
+
+      Needs cgo, and so a C compiler on PATH. On Windows that usually means
+      installing mingw; without it the Go toolchain refuses with
+      "-race requires cgo". CI runs this on Linux for that reason.
+    steps:
+      - go test -race ./...
+    output: As `test`, plus a report for any data race detected.
 
   lint:
     description: |
