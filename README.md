@@ -154,7 +154,7 @@ PowerShell 5.1 has no `&&` at all.
 
 | | |
 |---|---|
-| `noodge` | List this project's commands (the browser lands in a later release) |
+| `noodge` | Open the browser, or list when there is no terminal |
 | `noodge <command>` | Run a command from `noodge.yaml` |
 | `noodge run <command>` | The same, for when the name collides with one below |
 | `noodge list [--json]` | List commands, optionally machine-readable |
