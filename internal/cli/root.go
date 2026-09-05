@@ -44,6 +44,9 @@ type Env struct {
 type options struct {
 	// directory overrides where discovery starts.
 	directory string
+	// file names an exact config to load, skipping discovery. Useful for
+	// trying noodge against a config other than the project's own.
+	file string
 	// dryRun prints what would run instead of running it.
 	dryRun bool
 	// assumeYes answers any confirmation prompt with yes, for CI and scripts.
@@ -60,8 +63,12 @@ func (o *options) startDir(env *Env) (string, error) {
 	return os.Getwd()
 }
 
-// load discovers and loads the config.
+// load discovers and loads the config. An explicit --file wins over the
+// NOODGE_CONFIG env var, which in turn wins over walking up from a directory.
 func (o *options) load(env *Env) (*config.File, error) {
+	if o.file != "" {
+		return config.Load(o.file)
+	}
 	if path := os.Getenv("NOODGE_CONFIG"); path != "" {
 		return config.Load(path)
 	}
@@ -114,6 +121,10 @@ func NewRoot(env *Env, opts *options) (*cobra.Command, error) {
 	// silently ignored.
 	root.PersistentFlags().StringVarP(&opts.directory, "directory", "C", opts.directory,
 		"start looking for noodge.yaml in this directory instead of the current one")
+	// No shorthand: a config is free to declare a -f of its own, and a
+	// persistent shorthand would collide with it the way -h once did.
+	root.PersistentFlags().StringVar(&opts.file, "file", opts.file,
+		"load this exact config file instead of discovering a noodge.yaml")
 	root.PersistentFlags().BoolVar(&opts.dryRun, "dry-run", false,
 		"print the exact command lines that would run, and run nothing")
 	root.PersistentFlags().BoolVar(&opts.assumeYes, "yes", false,
@@ -147,10 +158,11 @@ func NewRoot(env *Env, opts *options) (*cobra.Command, error) {
 // Execute runs the command tree and returns the process exit code.
 func Execute(env *Env, args []string) int {
 	opts := &options{
-		// The config has to be read before the tree can be built, but the flag
-		// that says where to read it from is only parsed once the tree exists.
-		// Reading it out of the raw arguments first breaks that circle.
+		// The config has to be read before the tree can be built, but the flags
+		// that say where to read it from are only parsed once the tree exists.
+		// Reading them out of the raw arguments first breaks that circle.
 		directory: preScanDirectory(args),
+		file:      preScanFile(args),
 	}
 
 	root, loadErr := NewRoot(env, opts)
@@ -201,16 +213,28 @@ func allowedWithoutConfig(args []string) bool {
 
 // preScanDirectory finds -C or --directory in raw arguments.
 func preScanDirectory(args []string) string {
+	return preScanFlagValue(args, "-C", "--directory")
+}
+
+// preScanFile finds --file in raw arguments.
+func preScanFile(args []string) string {
+	return preScanFlagValue(args, "--file")
+}
+
+// preScanFlagValue reads the value of a value-taking flag straight from the raw
+// arguments, before the command tree exists to parse them. It accepts both the
+// "--flag value" and "--flag=value" forms.
+func preScanFlagValue(args []string, forms ...string) string {
 	for i, a := range args {
-		switch {
-		case a == "-C" || a == "--directory":
-			if i+1 < len(args) {
-				return args[i+1]
+		for _, f := range forms {
+			switch {
+			case a == f:
+				if i+1 < len(args) {
+					return args[i+1]
+				}
+			case strings.HasPrefix(a, f+"="):
+				return strings.TrimPrefix(a, f+"=")
 			}
-		case strings.HasPrefix(a, "--directory="):
-			return strings.TrimPrefix(a, "--directory=")
-		case strings.HasPrefix(a, "-C="):
-			return strings.TrimPrefix(a, "-C=")
 		}
 	}
 	return ""

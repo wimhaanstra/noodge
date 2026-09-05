@@ -330,9 +330,13 @@ unattended by accident. `--dry-run` never asks; it only prints what would run.
 | `noodge schema` | Print the JSON Schema |
 | `noodge version` | Print the version |
 
-`-C <dir>` runs against a project elsewhere, `NOODGE_CONFIG` points at a
-specific file, `--dry-run` prints the exact command lines without running
+`-C <dir>` runs against a project elsewhere, `--file <path>` loads one exact
+config instead of discovering a `noodge.yaml` (handy for trying a config out
+without dropping it into place), `NOODGE_CONFIG` does the same through the
+environment, `--dry-run` prints the exact command lines without running
 anything, and `--yes` answers any confirmation prompt (see below) with yes.
+Commands still run in the directory holding the config, wherever `--file`
+points.
 
 Built-in names win, so a command you call `list` is reached with
 `noodge run list`. `noodge validate` warns when that happens rather than

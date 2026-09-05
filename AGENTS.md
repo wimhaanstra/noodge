@@ -16,7 +16,9 @@ It reports every problem with a line and column. Errors block execution
 **Self-service:** if `noodge` is installed you can read the machine-readable
 contract directly — `noodge schema` prints the JSON Schema, and `noodge list
 --json` prints the commands the current project already declares. Prefer these
-over guessing.
+over guessing. To check a config you have just written *without* moving it into
+place, point noodge straight at it: `noodge --file <path> validate` (and
+`--file <path> list` to see how it groups).
 
 ---
 

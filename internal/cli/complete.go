@@ -91,7 +91,7 @@ func completeQuietly(args []string) (out string) {
 	}()
 
 	env := &Env{Stdout: &buf, Stderr: io.Discard}
-	opts := &options{directory: preScanDirectory(args)}
+	opts := &options{directory: preScanDirectory(args), file: preScanFile(args)}
 
 	// The root is usable even when loading fails: it carries the built-in
 	// commands, and those are how you fix a broken config, so they must stay
@@ -160,7 +160,7 @@ func withLenientNames(response string, args []string, opts *options, env *Env) s
 
 // valueFlags are the global flags that take a separate value, so the word
 // after them is that value rather than a command name.
-var valueFlags = map[string]bool{"-C": true, "--directory": true}
+var valueFlags = map[string]bool{"-C": true, "--directory": true, "--file": true}
 
 // positionalWords drops flags from a partially typed command line, leaving the
 // words that could be command names.
