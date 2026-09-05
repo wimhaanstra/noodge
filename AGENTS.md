@@ -77,6 +77,7 @@ paragraphs. Use a YAML block scalar (`|`) for multi-line prose.
 | `name` | string | no | Shown in the TUI header. |
 | `shell` | string | no | Interpreter for string steps. Default `cmd /c` on Windows, `sh -c` elsewhere. A command's own `shell` wins. |
 | `env` | map<string,string> | no | Applied to every command. A command's `env` is merged over the top. |
+| `groups` | list | no | Titles/describes command families in the browser. See [Grouping](#grouping). |
 | `commands` | map | **yes** | At least one entry, or it's an **error** ("no commands declared"). |
 
 ### A command (`commands.<name>`)
@@ -311,6 +312,49 @@ chosen in the browser:
   (exit 2) rather than guessing — so a destructive command never runs
   unattended by accident.
 
+## Grouping
+
+The browser groups commands into **families** automatically: a command belongs
+to the family named by the part of its name before the first colon. So
+`dev:api`, `dev:worker` and a bare `dev` are all the `dev` family. This needs no
+configuration — name commands `area:action` and they group themselves.
+
+- A family with **two or more** commands gets a heading in the browser.
+- A lone command (`setup`, or a single `check:scripts`) is shown as a plain
+  top-level row, with no heading.
+- Ordering follows the file; keeping a family's commands together in the file
+  keeps them together on screen.
+
+The optional top-level `groups:` block gives a family a readable **title** and a
+one-line **description** (shown when its heading is highlighted) — this is the
+place for what a banner comment would have said:
+
+```yaml
+groups:
+  - prefix: dev          # the family: commands named dev or dev:*
+    title: Running it
+    description: Restart one service without touching the others.
+  - prefix: db
+    title: Database
+  - prefix: demo
+    title: Demo data
+    description: "In order: demo:seed → demo:orders → demo:lines."
+
+commands:
+  dev: { ... }
+  dev:api: { ... }
+  db:reset: { ... }
+  demo:seed: { ... }
+```
+
+Each `groups` entry: `prefix` (**required**), `title` (optional, defaults to the
+prefix), `description` (optional). A declared family always gets a heading, even
+with one member. Validation: a missing or duplicate `prefix` is an **error**; a
+`prefix` that matches no command is a **warning**.
+
+Searching is unaffected — pressing `/` filters across names *and* descriptions,
+and headings drop out so results are a flat list.
+
 ## Placeholders
 
 Steps are plain text; substitute parameter values with `{{...}}`.
@@ -427,6 +471,8 @@ Before returning a `noodge.yaml`, confirm:
 - [ ] `cwd`, if used, is relative.
 - [ ] Destructive/irreversible commands set `confirm` (`true` or a prompt
       string).
+- [ ] For a long file, related commands share an `area:action` prefix so they
+      group in the browser; add a `groups:` block if titles/descriptions help.
 - [ ] Recommend the user run `noodge validate` to confirm.
 ```
 

@@ -42,12 +42,19 @@ type Model struct {
 // New builds the browser for a loaded config.
 func New(file *config.File) Model {
 	st := newStyles()
-	cmds := visible(file.Config.Commands)
+	items := buildItems(file)
+
+	l := newList(items, st, 30, 10)
+	// Start on the first real command so the detail pane opens on documentation
+	// rather than on a family heading.
+	if len(items) > 0 {
+		l.Select(firstCommandIndex(items))
+	}
 
 	return Model{
 		file:      *file,
 		styles:    st,
-		list:      newList(cmds, st, 30, 10),
+		list:      l,
 		detail:    viewport.New(viewport.WithWidth(40), viewport.WithHeight(10)),
 		lastIndex: -1,
 	}
@@ -82,7 +89,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleKey(msg)
 	}
 
-	return m, nil
+	// Everything else is an async message a component asked for and must get
+	// back: the list's filter results (FilterMatchesMsg) above all, without
+	// which typing a filter narrows nothing. Route it to whichever is active.
+	if m.state == stateForm {
+		f, cmd := m.form.Update(msg)
+		m.form = f
+		return m, cmd
+	}
+
+	var cmd tea.Cmd
+	m.list, cmd = m.list.Update(msg)
+	m.refreshDetail(false)
+	return m, cmd
 }
 
 func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
@@ -172,13 +191,15 @@ func (m *Model) refreshDetail(force bool) {
 	}
 	m.lastIndex = m.list.Index()
 
-	cmd, ok := selectedCommand(m.list)
-	if !ok {
+	switch sel := m.list.SelectedItem().(type) {
+	case item:
+		m.detail.SetContent(renderDetail(sel.cmd, m.styles, m.detailWidth()))
+	case header:
+		m.detail.SetContent(renderGroupDetail(sel, m.styles, m.detailWidth()))
+	default:
 		m.detail.SetContent(m.styles.muted.Render("No commands to show."))
 		return
 	}
-
-	m.detail.SetContent(renderDetail(cmd, m.styles, m.detailWidth()))
 	m.detail.GotoTop()
 }
 

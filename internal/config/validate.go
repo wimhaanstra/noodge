@@ -63,6 +63,51 @@ func Validate(f *File) Diagnostics {
 		d = append(d, validateCommand(f, &cfg.Commands[i], seen, aliases)...)
 	}
 
+	d = append(d, validateGroups(f)...)
+
+	return d
+}
+
+// validateGroups checks the optional groups: block. A group only decorates the
+// browser, so its problems are mild: a prefix that names no command is a
+// warning, and only a malformed or duplicated prefix is an error.
+func validateGroups(f *File) Diagnostics {
+	var d Diagnostics
+	cfg := f.Config
+
+	// The set of families the commands actually form, so a groups entry that
+	// matches nothing can be pointed out.
+	families := map[string]bool{}
+	for _, nc := range cfg.Commands {
+		families[GroupKey(nc.Name)] = true
+	}
+
+	seen := map[string]bool{}
+	for i, g := range cfg.Groups {
+		at := []step{key("groups"), index(i)}
+
+		if strings.TrimSpace(g.Prefix) == "" {
+			d = append(d, f.diag(SeverityError,
+				"group has no prefix",
+				"add prefix: <the part of a command name before its colon>", at...))
+			continue
+		}
+
+		if seen[g.Prefix] {
+			d = append(d, f.diag(SeverityError,
+				fmt.Sprintf("group prefix %q is declared more than once", g.Prefix), "",
+				append(slices.Clone(at), key("prefix"))...))
+		}
+		seen[g.Prefix] = true
+
+		if !families[g.Prefix] {
+			d = append(d, f.diag(SeverityWarning,
+				fmt.Sprintf("group prefix %q matches no command", g.Prefix),
+				"a group heads the commands named <prefix> or <prefix>:something",
+				append(slices.Clone(at), key("prefix"))...))
+		}
+	}
+
 	return d
 }
 

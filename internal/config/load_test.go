@@ -42,6 +42,13 @@ func TestLoadDecodesCommandFields(t *testing.T) {
 		t.Errorf("file env: got %q, want development", f.Config.Env["NODE_ENV"])
 	}
 
+	if len(f.Config.Groups) != 1 {
+		t.Fatalf("groups: got %d, want 1", len(f.Config.Groups))
+	}
+	if g := f.Config.Groups[0]; g.Prefix != "start" || g.Title != "Running it" || g.Description != "Ways to start the API." {
+		t.Errorf("group: got %+v", g)
+	}
+
 	sl, ok := f.Config.Commands.Get("start:local")
 	if !ok {
 		t.Fatal("start:local not found")

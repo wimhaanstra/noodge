@@ -83,6 +83,28 @@
       "title": "Confirm",
       "description": "Ask before the command runs. true asks with a default prompt; a string asks with that prompt. Omitted or false runs without asking. Meant for destructive or irreversible commands."
     },
+    "Group": {
+      "properties": {
+        "prefix": {
+          "type": "string",
+          "description": "Prefix is the family this describes: the part of a command name before\nits first colon. For \"dev:api\" and \"dev:worker\" the prefix is \"dev\"."
+        },
+        "title": {
+          "type": "string",
+          "description": "Title is the heading shown above the family in the browser. Defaults to\nthe prefix itself when omitted."
+        },
+        "description": {
+          "type": "string",
+          "description": "Description is the line or two shown when the family's heading is\nhighlighted. Use it for what the banner comments in a long file would\nhave said."
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "prefix"
+      ],
+      "description": "Group documents a family of commands in the browser: every command whose name begins with Prefix followed by a colon, plus a command named exactly Prefix."
+    },
     "Param": {
       "properties": {
         "name": {
@@ -189,6 +211,13 @@
       },
       "type": "object",
       "description": "Env is applied to every command in this file. A command's own env is\nmerged over the top, so a command can override a single variable\nwithout restating the rest."
+    },
+    "groups": {
+      "items": {
+        "$ref": "#/$defs/Group"
+      },
+      "type": "array",
+      "description": "Groups give the command families a heading and a short description in the\nbrowser. A command belongs to the family named by the part of its name\nbefore the first colon, so \"dev:api\" and \"dev:worker\" are both in the\n\"dev\" family. Declaring a family here is optional — families are shown\neither way, headed by the bare prefix; this only adds a readable title\nand a line of explanation."
     },
     "commands": {
       "$ref": "#/$defs/Commands",

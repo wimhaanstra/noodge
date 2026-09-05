@@ -77,6 +77,48 @@ up/down move   enter run   / filter   q quit
 `/` filters on names *and* descriptions, so a word you half-remember from the
 docs finds the command.
 
+### Families
+
+Once a project has more than a handful of commands the flat list gets long, so
+the browser groups them into **families**. A command belongs to the family
+named by the part of its name before the first colon, so `dev`, `dev:api` and
+`dev:worker` are one family:
+
+```
+fleetgo-exact-gateway  D:\dev\project.yaml
+
+  setup                | Running it
+  Running it           |
+> dev                  | Restart one service without touching the others.
+  dev:api              |
+  dev:worker           | 2 commands in this group.
+  Database             |
+  db:stop              |
+  db:reset             |
+```
+
+This needs no configuration — name commands `area:action` and they group
+themselves. A family of one (a lone `setup`) stays a plain row rather than
+getting a heading of its own. Filtering with `/` hides the headings and gives
+you a flat list of matches, so search and grouping stay out of each other's way.
+
+To put a readable title and a line of explanation on a family — the thing a
+banner comment in the file used to do — add an optional `groups:` block:
+
+```yaml
+groups:
+  - prefix: dev
+    title: Running it
+    description: Restart one service without touching the others.
+  - prefix: db
+    title: Database
+```
+
+`prefix` is required; `title` defaults to the prefix; `description` shows in the
+right-hand pane when the family's heading is highlighted. A declared family is
+always given a heading, even with a single member. `noodge validate` warns if a
+prefix matches no command.
+
 If the command takes parameters, Enter opens a form — required ones first,
 defaults pre-filled, each with its description beside it. Confirming prints
 the equivalent command line before running it, so the browser teaches the

@@ -28,9 +28,55 @@ type Config struct {
 	// without restating the rest.
 	Env map[string]string `json:"env,omitempty"`
 
+	// Groups give the command families a heading and a short description in the
+	// browser. A command belongs to the family named by the part of its name
+	// before the first colon, so "dev:api" and "dev:worker" are both in the
+	// "dev" family. Declaring a family here is optional — families are shown
+	// either way, headed by the bare prefix; this only adds a readable title
+	// and a line of explanation.
+	Groups []Group `json:"groups,omitempty"`
+
 	// Commands are the runnable commands, kept in the order they appear in
 	// the file so the TUI can list them the way they were written.
 	Commands Commands `json:"commands"`
+}
+
+// Group documents a family of commands in the browser: every command whose
+// name begins with Prefix followed by a colon, plus a command named exactly
+// Prefix.
+type Group struct {
+	// Prefix is the family this describes: the part of a command name before
+	// its first colon. For "dev:api" and "dev:worker" the prefix is "dev".
+	Prefix string `json:"prefix"`
+
+	// Title is the heading shown above the family in the browser. Defaults to
+	// the prefix itself when omitted.
+	Title string `json:"title,omitempty"`
+
+	// Description is the line or two shown when the family's heading is
+	// highlighted. Use it for what the banner comments in a long file would
+	// have said.
+	Description string `json:"description,omitempty"`
+}
+
+// GroupKey is the family a command name belongs to: everything before its
+// first colon, or the whole name when there is none. It is the single place
+// this derivation lives, shared by validation and the browser.
+func GroupKey(name string) string {
+	if i := indexColon(name); i >= 0 {
+		return name[:i]
+	}
+	return name
+}
+
+// indexColon returns the position of the first colon, or -1.
+func indexColon(s string) int {
+	for i := 0; i < len(s); i++ {
+		if s[i] == ':' {
+			return i
+		}
+	}
+	return -1
 }
 
 // Commands is an ordered set of named commands. YAML mappings are unordered by

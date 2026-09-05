@@ -65,6 +65,30 @@ func renderDetail(nc config.NamedCommand, st styles, width int) string {
 	return b.String()
 }
 
+// renderGroupDetail is the right-hand pane for a family heading: its title,
+// what it is for, and how many commands it holds. A family is a navigation aid,
+// so this stays short — the commands under it carry the real documentation.
+func renderGroupDetail(h header, st styles, width int) string {
+	var b strings.Builder
+
+	b.WriteString(st.title.Render(h.title))
+	b.WriteString("\n\n")
+
+	if desc := strings.TrimSpace(h.description); desc != "" {
+		b.WriteString(wrap(desc, width))
+		b.WriteString("\n\n")
+	}
+
+	commands := "commands"
+	if h.count == 1 {
+		commands = "command"
+	}
+	b.WriteString(st.muted.Render(fmt.Sprintf("%d %s in this group.", h.count, commands)))
+	b.WriteString("\n")
+
+	return b.String()
+}
+
 func renderParams(params []config.Param, st styles, width int) string {
 	var b strings.Builder
 

@@ -26,6 +26,7 @@ type styles struct {
 	item     lipgloss.Style
 	muted    lipgloss.Style
 	heading  lipgloss.Style
+	group    lipgloss.Style
 	label    lipgloss.Style
 	required lipgloss.Style
 	warn     lipgloss.Style
@@ -54,6 +55,7 @@ func newStyles() styles {
 		item:     lipgloss.NewStyle(),
 		muted:    lipgloss.NewStyle().Foreground(muted),
 		heading:  lipgloss.NewStyle().Bold(true),
+		group:    lipgloss.NewStyle().Bold(true).Foreground(muted),
 		label:    lipgloss.NewStyle().Bold(true),
 		required: lipgloss.NewStyle().Foreground(warn),
 		warn:     lipgloss.NewStyle().Foreground(warn),

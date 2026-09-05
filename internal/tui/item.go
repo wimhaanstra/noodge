@@ -40,29 +40,35 @@ func (d delegate) Spacing() int { return 0 }
 func (d delegate) Update(tea.Msg, *list.Model) tea.Cmd { return nil }
 
 func (d delegate) Render(w io.Writer, m list.Model, index int, listItem list.Item) {
-	it, ok := listItem.(item)
-	if !ok {
-		return
-	}
-
 	prefix := noCursor
-	style := d.styles.item
-	if index == m.Index() {
+	focused := index == m.Index()
+	if focused {
 		prefix = cursor
-		style = d.styles.selected
 	}
 
-	name := truncate(it.cmd.Name, d.width-len(prefix))
-	fmt.Fprint(w, style.Render(prefix+name))
+	switch v := listItem.(type) {
+	case header:
+		// A heading stays legible when the cursor is on it, but reads as a
+		// heading rather than a runnable row the rest of the time.
+		style := d.styles.group
+		if focused {
+			style = d.styles.selected
+		}
+		title := truncate(v.title, d.width-len(prefix))
+		fmt.Fprint(w, style.Render(prefix+title))
+
+	case item:
+		style := d.styles.item
+		if focused {
+			style = d.styles.selected
+		}
+		name := truncate(v.cmd.Name, d.width-len(prefix))
+		fmt.Fprint(w, style.Render(prefix+name))
+	}
 }
 
-// newList builds the command list.
-func newList(cmds []config.NamedCommand, st styles, width, height int) list.Model {
-	items := make([]list.Item, 0, len(cmds))
-	for _, c := range cmds {
-		items = append(items, item{cmd: c})
-	}
-
+// newList builds the command list from rows already grouped by buildItems.
+func newList(items []list.Item, st styles, width, height int) list.Model {
 	l := list.New(items, delegate{styles: st, width: width}, width, height)
 	l.SetShowTitle(false)
 	// Hiding the title leaves the title bar's own padding behind, which puts a
