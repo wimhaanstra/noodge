@@ -135,6 +135,10 @@ commands:
 `description` and `output` are the point of the whole thing. They are what the
 browser shows you when you are trying to remember which command to run.
 
+> **Writing one with an AI agent?** [AGENTS.md](AGENTS.md) is a compact,
+> field-by-field authoring contract written for an LLM — every key, every
+> validation rule, and a pre-flight checklist. Point your agent at it.
+
 ### Placeholders
 
 A parameter has two separate spellings: `name` is the template variable, and
