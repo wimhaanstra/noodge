@@ -52,7 +52,8 @@ func buildItems(file *config.File) []list.Item {
 		ms := members[k]
 		g, isDeclared := declared[k]
 
-		if len(ms) >= 2 || isDeclared {
+		hasHeading := len(ms) >= 2 || isDeclared
+		if hasHeading {
 			title := k
 			if g.Title != "" {
 				title = g.Title
@@ -65,7 +66,7 @@ func buildItems(file *config.File) []list.Item {
 		}
 
 		for _, nc := range ms {
-			items = append(items, item{cmd: nc})
+			items = append(items, item{cmd: nc, indent: hasHeading})
 		}
 	}
 

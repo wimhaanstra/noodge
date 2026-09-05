@@ -137,6 +137,63 @@ func TestFilteringHidesHeadingsAndFindsByDescription(t *testing.T) {
 	}
 }
 
+// listLineWith returns the first rendered line containing substr.
+func listLineWith(view, substr string) (string, bool) {
+	for _, ln := range strings.Split(view, "\n") {
+		if strings.Contains(ln, substr) {
+			return ln, true
+		}
+	}
+	return "", false
+}
+
+func TestSubCommandsAreIndentedUnderHeadings(t *testing.T) {
+	m := sized(t, groupedConfig)
+	view := plain(m.View().Content)
+
+	// A command under a heading is stepped in two spaces past the heading, so
+	// four in total for an unselected row ("  " cursor gutter + "  " indent).
+	sub, ok := listLineWith(view, "db:stop")
+	if !ok {
+		t.Fatal("db:stop not shown")
+	}
+	if !strings.HasPrefix(sub, "    db:stop") {
+		t.Errorf("a sub-command should be indented under its heading:\n%q", sub)
+	}
+
+	// The heading itself sits at the family indent, not the command indent.
+	head, ok := listLineWith(view, "Database")
+	if !ok {
+		t.Fatal("heading not shown")
+	}
+	if !strings.HasPrefix(head, "  Database") || strings.HasPrefix(head, "    Database") {
+		t.Errorf("a heading should not be indented like a command:\n%q", head)
+	}
+
+	// A lone command with no heading stays flush.
+	lone, ok := listLineWith(view, "check:scripts")
+	if !ok {
+		t.Fatal("check:scripts not shown")
+	}
+	if strings.HasPrefix(lone, "    check:scripts") {
+		t.Errorf("a command with no heading should not be indented:\n%q", lone)
+	}
+}
+
+func TestFilteringFlattensIndentation(t *testing.T) {
+	m := sized(t, groupedConfig)
+	m.list.SetFilterText("Rebuilds")
+
+	view := plain(m.View().Content)
+	ln, ok := listLineWith(view, "db:reset")
+	if !ok {
+		t.Fatal("db:reset should be a match")
+	}
+	if strings.HasPrefix(ln, "    db:reset") {
+		t.Errorf("a filtered match should not be indented (its heading is gone):\n%q", ln)
+	}
+}
+
 func TestInitialSelectionIsACommand(t *testing.T) {
 	m := sized(t, groupedConfig)
 	if _, ok := m.list.SelectedItem().(item); !ok {

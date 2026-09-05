@@ -87,20 +87,20 @@ named by the part of its name before the first colon, so `dev`, `dev:api` and
 ```
 fleetgo-exact-gateway  D:\dev\project.yaml
 
-  setup                | Running it
-  Running it           |
-> dev                  | Restart one service without touching the others.
-  dev:api              |
-  dev:worker           | 2 commands in this group.
-  Database             |
-  db:stop              |
-  db:reset             |
+  Running it           | Running it
+>   dev                |
+    dev:api            | Restart one service without touching the others.
+    dev:worker         |
+  Database             | 5 commands in this group.
+    db:stop            |
+    db:reset           |
 ```
 
-This needs no configuration — name commands `area:action` and they group
-themselves. A family of one (a lone `setup`) stays a plain row rather than
-getting a heading of its own. Filtering with `/` hides the headings and gives
-you a flat list of matches, so search and grouping stay out of each other's way.
+Commands sit indented under their family's heading. This needs no configuration
+— name commands `area:action` and they group themselves. A family of one (a lone
+`setup`) stays a plain, unindented row rather than getting a heading of its own.
+Filtering with `/` hides the headings and flattens the matches, so search and
+grouping stay out of each other's way.
 
 To put a readable title and a line of explanation on a family — the thing a
 banner comment in the file used to do — add an optional `groups:` block:

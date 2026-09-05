@@ -15,6 +15,9 @@ import (
 // item is one command in the left-hand pane.
 type item struct {
 	cmd config.NamedCommand
+	// indent is set when the command sits under a family heading, so it can be
+	// shown stepped in beneath it. A lone command with no heading is not.
+	indent bool
 }
 
 // FilterValue is what the list's built-in filter matches against. Including
@@ -62,8 +65,14 @@ func (d delegate) Render(w io.Writer, m list.Model, index int, listItem list.Ite
 		if focused {
 			style = d.styles.selected
 		}
-		name := truncate(v.cmd.Name, d.width-len(prefix))
-		fmt.Fprint(w, style.Render(prefix+name))
+		// Step commands in under their heading — but not while filtering, when
+		// the headings are gone and the matches read best as a flat list.
+		pad := ""
+		if v.indent && m.FilterState() == list.Unfiltered {
+			pad = "  "
+		}
+		name := truncate(v.cmd.Name, d.width-len(prefix)-len(pad))
+		fmt.Fprint(w, style.Render(prefix+pad+name))
 	}
 }
 
