@@ -13,6 +13,11 @@ It reports every problem with a line and column. Errors block execution
 (exit 2); warnings never do. This document marks each rule as **error** or
 **warning** so you can get it right before validating.
 
+**Self-service:** if `noodge` is installed you can read the machine-readable
+contract directly — `noodge schema` prints the JSON Schema, and `noodge list
+--json` prints the commands the current project already declares. Prefer these
+over guessing.
+
 ---
 
 ## File location and name
@@ -135,14 +140,81 @@ Parameter validation rules:
 
 ### Parameter types
 
-| Type | Value | Notes |
-|---|---|---|
-| `string` | any text | The default when `type` is omitted. |
-| `int` | whole number | |
-| `number` | may have a fraction | |
-| `bool` | takes **no value** on the command line | Passing the flag sets it true. |
-| `path` | filesystem path | Leading `~` expanded; a `required` path is checked to exist before running. |
-| `enum` | one of `values` | |
+There are **six** types. Pick by what the value is — the "Use when" column is
+how to choose:
+
+| Type | Value | Use when | Notes |
+|---|---|---|---|
+| `string` | any text | free-form text | The default when `type` is omitted. Add `pattern:` to constrain it. |
+| `int` | whole number | counts, ports, sizes | Rejected before running if not a whole number. |
+| `number` | may have a fraction | ratios, timeouts, floats | Rejected before running if not numeric. |
+| `bool` | on/off flag | a toggle | Takes **no value** on the command line — passing the flag sets it true. |
+| `path` | filesystem path | a file or directory | Leading `~` is expanded; a `required` path is checked to exist before running. |
+| `enum` | **one of a fixed list** | the value must be one of a known set | **This is the type to reach for whenever the input is a choice** (environment, mode, region, log level…). Requires `values:`. Invalid input is rejected up front, TAB completes the choices, and the TUI shows a picker. |
+
+> **Choosing between a set of values? Use `enum`.** It is the single most
+> useful type for reducing errors: the user cannot pass anything outside
+> `values`, the browser turns it into a left/right selector, and the shell
+> completes the allowed values. Do not model a choice as a `string` and check
+> it inside a step — declare it as an `enum` and let noodge enforce it.
+
+**One worked example of each type**, all in a single command:
+
+```yaml
+commands:
+  serve:
+    description: Runs the server.
+    params:
+      # string — free text; pattern is optional
+      - name: host
+        flag: --host
+        type: string
+        default: localhost
+        pattern: '^[a-z0-9.-]+$'
+        description: Hostname to bind to.
+
+      # int — whole number
+      - name: port
+        flag: --port
+        type: int
+        default: 8080
+        description: Port to listen on.
+
+      # number — may have a fraction
+      - name: timeout
+        flag: --timeout
+        type: number
+        default: 2.5
+        description: Request timeout in seconds.
+
+      # bool — a flag with no value; presence sets it true
+      - name: verbose
+        flag: --verbose
+        short: -v
+        type: bool
+        description: Log every request.
+
+      # path — ~ is expanded; a required path must exist before running
+      - name: config
+        flag: --config
+        type: path
+        required: true
+        description: Path to the config file.
+
+      # enum — the value must be one of `values`; anything else is rejected
+      - name: env
+        flag: --env
+        type: enum
+        values: [dev, staging, prod]
+        default: dev
+        description: Which environment to run against.
+    steps:
+      - node server.js {{flag host}} {{flag port}} {{flag timeout}} {{flag verbose}} {{flag config}} {{flag env}}
+```
+
+Invoking it: `noodge serve --config ./app.yaml --env prod -v`. Passing
+`--env qa` fails before anything runs with `--env expects one of dev,
+staging, prod, got "qa"`.
 
 ---
 
