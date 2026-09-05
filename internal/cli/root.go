@@ -46,6 +46,8 @@ type options struct {
 	directory string
 	// dryRun prints what would run instead of running it.
 	dryRun bool
+	// assumeYes answers any confirmation prompt with yes, for CI and scripts.
+	assumeYes bool
 }
 
 func (o *options) startDir(env *Env) (string, error) {
@@ -114,6 +116,8 @@ func NewRoot(env *Env, opts *options) (*cobra.Command, error) {
 		"start looking for noodge.yaml in this directory instead of the current one")
 	root.PersistentFlags().BoolVar(&opts.dryRun, "dry-run", false,
 		"print the exact command lines that would run, and run nothing")
+	root.PersistentFlags().BoolVar(&opts.assumeYes, "yes", false,
+		"answer any confirmation prompt with yes, for CI and scripts")
 
 	root.AddCommand(
 		newListCmd(env, opts),

@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"bufio"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -9,6 +11,44 @@ import (
 	"github.com/wimhaanstra/noodge/internal/config"
 	"github.com/wimhaanstra/noodge/internal/runner"
 )
+
+// errCancelled reports that the user declined a confirmation prompt. It is a
+// refusal to start like any other, so it exits with ExitConfig.
+var errCancelled = errors.New("cancelled")
+
+// confirmIfNeeded asks the user to confirm a command that declares confirm:,
+// and returns errCancelled if they decline.
+//
+// --yes skips the question, which is the deliberate opt-in for CI and scripts.
+// Without one, and without a terminal to ask at, the command refuses rather
+// than assuming an answer — a destructive command must never run unattended by
+// accident. This runs the same whether the command was typed or chosen in the
+// browser, because the browser hands its choice back through this same path.
+func confirmIfNeeded(env *Env, opts *options, nc *config.NamedCommand) error {
+	if !nc.Confirm.Required || opts.assumeYes {
+		return nil
+	}
+
+	prompt := nc.Confirm.Prompt
+	if prompt == "" {
+		prompt = fmt.Sprintf("Really run %q?", nc.Name)
+	}
+
+	if !env.TTY || env.Stdin == nil {
+		return fmt.Errorf("%q needs confirmation but there is no terminal to ask at\n"+
+			"  hint: pass --yes to confirm without being asked", nc.Name)
+	}
+
+	fmt.Fprintf(env.Stderr, "%s [y/N] ", prompt)
+
+	line, _ := bufio.NewReader(env.Stdin).ReadString('\n')
+	switch strings.ToLower(strings.TrimSpace(line)) {
+	case "y", "yes":
+		return nil
+	default:
+		return errCancelled
+	}
+}
 
 // buildCommands turns every command in a config into a Cobra command.
 //
@@ -71,6 +111,10 @@ func buildCommand(env *Env, opts *options, file *config.File, nc *config.NamedCo
 		if opts.dryRun {
 			printPlan(env, nc, plan)
 			return nil
+		}
+
+		if err := confirmIfNeeded(env, opts, nc); err != nil {
+			return err
 		}
 		return runner.Run(req, plan)
 	}

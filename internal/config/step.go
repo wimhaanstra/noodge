@@ -283,3 +283,38 @@ func (Commands) JSONSchema() *jsonschema.Schema {
 }
 
 func ptr[T any](v T) *T { return &v }
+
+// UnmarshalYAML accepts either form confirm can take: a bool, or a prompt
+// string. A string implies confirmation is required, with that string as the
+// question.
+func (c *Confirm) UnmarshalYAML(b []byte) error {
+	var flag bool
+	if err := yaml.Unmarshal(b, &flag); err == nil {
+		c.Required = flag
+		c.Prompt = ""
+		return nil
+	}
+
+	var msg string
+	if err := yaml.Unmarshal(b, &msg); err == nil {
+		c.Required = true
+		c.Prompt = msg
+		return nil
+	}
+
+	return errors.New("confirm must be true, false, or a prompt string")
+}
+
+// JSONSchema describes the two accepted shapes for editor autocomplete.
+func (Confirm) JSONSchema() *jsonschema.Schema {
+	return &jsonschema.Schema{
+		Title: "Confirm",
+		Description: "Ask before the command runs. true asks with a default prompt; a string " +
+			"asks with that prompt. Omitted or false runs without asking. Meant for " +
+			"destructive or irreversible commands.",
+		OneOf: []*jsonschema.Schema{
+			{Type: "boolean"},
+			{Type: "string"},
+		},
+	}
+}

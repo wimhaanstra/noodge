@@ -235,6 +235,44 @@ When you would rather have the colours than the labels:
 Entries get no stdin: several processes reading one terminal is a race with no
 useful outcome.
 
+### Asking before a destructive command
+
+Some commands you want to be sure about — dropping a database, deleting build
+artifacts, deploying to production. `confirm` makes noodge ask first:
+
+```yaml
+db:reset:
+  description: Drops and recreates the local database.
+  confirm: true                        # a default prompt
+  steps:
+    - ./scripts/reset-db.sh
+
+deploy:prod:
+  description: Deploys to production.
+  confirm: This deploys to PRODUCTION. Continue?   # your own prompt
+  steps:
+    - ./scripts/deploy.sh --env prod
+```
+
+`confirm: true` asks with a default question; a string asks with that string.
+Omitting it, or `confirm: false`, runs without asking.
+
+The prompt defaults to **no**, so a stray Enter cancels rather than fires.
+Declining runs nothing and exits 2. It behaves the same whether you type the
+command or pick it in the browser, because the browser runs your choice through
+the same path.
+
+`--yes` answers the prompt for you, which is how a confirm command runs in CI
+or a script:
+
+```bash
+noodge deploy:prod --yes
+```
+
+Without a terminal to ask at and without `--yes`, a confirm command refuses to
+run rather than guess an answer — a destructive command should never fire
+unattended by accident. `--dry-run` never asks; it only prints what would run.
+
 ## Commands
 
 | | |
@@ -251,8 +289,8 @@ useful outcome.
 | `noodge version` | Print the version |
 
 `-C <dir>` runs against a project elsewhere, `NOODGE_CONFIG` points at a
-specific file, and `--dry-run` prints the exact command lines without running
-anything.
+specific file, `--dry-run` prints the exact command lines without running
+anything, and `--yes` answers any confirmation prompt (see below) with yes.
 
 Built-in names win, so a command you call `list` is reached with
 `noodge run list`. `noodge validate` warns when that happens rather than

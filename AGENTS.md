@@ -88,6 +88,7 @@ The key is the name you type: `noodge build`, `noodge start:local`.
 | `cwd` | string | no | Working dir, **relative** to the config. Absolute → **error**. Missing dir → **warning** (may be created by an earlier step). |
 | `aliases` | list<string> | no | Alternative names. Same charset as command names; must be unique. |
 | `hidden` | bool | no | Hides from TUI and completion; still runnable by name. For internal/CI commands. |
+| `confirm` | bool \| string | no | Ask before running. See [Confirmation](#confirmation). Use for destructive/irreversible commands. |
 | `shell` | string | no | Overrides the interpreter for this command's string steps. |
 
 **Command name charset** (`error` if violated): start with a letter or digit,
@@ -198,6 +199,45 @@ Parallel rules:
 An empty step (no command at all) → **error**.
 
 ---
+
+## Confirmation
+
+A command can require the user to confirm before it runs — use it for anything
+destructive or irreversible (dropping a database, deleting files, deploying to
+production). Set `confirm` on the command:
+
+```yaml
+commands:
+  db:reset:
+    description: Drops and recreates the local database.
+    confirm: true                          # ask with a default prompt
+    steps:
+      - ./scripts/reset-db.sh
+
+  deploy:prod:
+    description: Deploys to production.
+    confirm: This deploys to PRODUCTION. Continue?   # ask with this prompt
+    steps:
+      - ./scripts/deploy.sh --env prod
+```
+
+`confirm` accepts two forms:
+
+- `confirm: true` — ask with a default prompt (`Really run "<name>"?`).
+- `confirm: <string>` — ask with that string as the question.
+- Omitting it, or `confirm: false`, runs without asking.
+
+Behaviour, identical whether the command is typed (`noodge deploy:prod`) or
+chosen in the browser:
+
+- The prompt defaults to **no** — a bare Enter cancels. Declining exits `2`
+  and runs nothing.
+- `--yes` skips the prompt (the opt-in for CI and scripts):
+  `noodge deploy:prod --yes`.
+- `--dry-run` never prompts; it only prints the plan.
+- With **no terminal** to ask at and no `--yes`, the command **refuses**
+  (exit 2) rather than guessing — so a destructive command never runs
+  unattended by accident.
 
 ## Placeholders
 
@@ -313,6 +353,8 @@ Before returning a `noodge.yaml`, confirm:
 - [ ] Optional params are referenced via `{{flag x}}`, not bare `{{x}}`.
 - [ ] Parallel groups have ≥2 named entries, no nesting, colon-free names.
 - [ ] `cwd`, if used, is relative.
+- [ ] Destructive/irreversible commands set `confirm` (`true` or a prompt
+      string).
 - [ ] Recommend the user run `noodge validate` to confirm.
 ```
 

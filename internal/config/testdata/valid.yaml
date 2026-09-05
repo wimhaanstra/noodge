@@ -44,6 +44,7 @@ commands:
   release:
     description: Builds, tests and packages a release artifact.
     hidden: true
+    confirm: Cut a release from the current commit?
     steps:
       - npm run build
       - npm test {{args}}

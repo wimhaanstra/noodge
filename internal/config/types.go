@@ -99,8 +99,29 @@ type Command struct {
 	// It remains runnable by name. Use it for internal or CI-only commands.
 	Hidden bool `json:"hidden,omitempty"`
 
+	// Confirm asks the user to confirm before this command runs. Write true for
+	// a default prompt, or a string to use as the prompt itself. Omit it, or
+	// write false, to run without asking. Use it for destructive or
+	// irreversible commands. Confirmation is skipped by --yes and by --dry-run,
+	// and without a terminal to ask at the command refuses unless --yes is given.
+	Confirm Confirm `json:"confirm,omitempty"`
+
 	// Shell overrides the interpreter for this command's string steps.
 	Shell string `json:"shell,omitempty"`
+}
+
+// Confirm controls whether noodge asks the user to confirm before a command
+// runs. In a noodge.yaml it is written as either a bool or a string:
+//
+//	confirm: true                      # ask with a default prompt
+//	confirm: Wipe the production DB?    # ask with this prompt
+//
+// It is meant for destructive or irreversible commands.
+type Confirm struct {
+	// Required reports whether a confirmation is asked for before running.
+	Required bool `json:"-"`
+	// Prompt is the question shown. Empty means noodge uses a default.
+	Prompt string `json:"-"`
 }
 
 // ParamType is the type of a parameter's value.

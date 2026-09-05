@@ -48,6 +48,10 @@
           "type": "boolean",
           "description": "Hidden keeps the command out of the TUI list and out of tab completion.\nIt remains runnable by name. Use it for internal or CI-only commands."
         },
+        "confirm": {
+          "$ref": "#/$defs/Confirm",
+          "description": "Confirm asks the user to confirm before this command runs. Write true for\na default prompt, or a string to use as the prompt itself. Omit it, or\nwrite false, to run without asking. Use it for destructive or\nirreversible commands. Confirmation is skipped by --yes and by --dry-run,\nand without a terminal to ask at the command refuses unless --yes is given."
+        },
         "shell": {
           "type": "string",
           "description": "Shell overrides the interpreter for this command's string steps."
@@ -66,6 +70,18 @@
       },
       "type": "object",
       "description": "The runnable commands, keyed by the name you type after `noodge`."
+    },
+    "Confirm": {
+      "oneOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "string"
+        }
+      ],
+      "title": "Confirm",
+      "description": "Ask before the command runs. true asks with a default prompt; a string asks with that prompt. Omitted or false runs without asking. Meant for destructive or irreversible commands."
     },
     "Param": {
       "properties": {

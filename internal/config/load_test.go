@@ -85,6 +85,9 @@ func TestLoadDecodesBothStepForms(t *testing.T) {
 	if !rel.Hidden {
 		t.Error("release should be hidden")
 	}
+	if !rel.Confirm.Required || rel.Confirm.Prompt != "Cut a release from the current commit?" {
+		t.Errorf("confirm: got %+v, want the string form to require confirmation with a prompt", rel.Confirm)
+	}
 	if len(rel.Steps) != 3 {
 		t.Fatalf("steps: got %d, want 3", len(rel.Steps))
 	}
